@@ -1,0 +1,45 @@
+1
+00:00:00,000 --> 00:00:04,060
+speaking an new language
+
+2
+00:00:04,060 --> 00:00:08,560
+speaking an new language
+
+3
+00:00:08,560 --> 00:00:12,580
+speaking an new language
+
+4
+00:00:12,580 --> 00:00:16,920
+speaking an new language
+
+5
+00:00:16,920 --> 00:00:21,020
+speaking an new language
+
+6
+00:00:21,020 --> 00:00:24,400
+speaking an new language
+
+7
+00:00:24,400 --> 00:00:28,780
+speaking an new language
+
+8
+00:00:29,540 --> 00:00:33,779
+speaking an new language
+
+9
+00:00:33,779 --> 00:00:37,619
+speaking an new language
+
+10
+00:00:37,619 --> 00:00:41,419
+speaking an new language
+
+11
+00:00:41,419 --> 00:00:42,320
+speaking an new language
+
+

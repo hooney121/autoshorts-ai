@@ -1,0 +1,37 @@
+1
+00:00:00,000 --> 00:00:05,100
+Hello. Today is our 1st anniversary.
+
+2
+00:00:05,100 --> 00:00:07,740
+Currently, 29 students have entered the school.
+
+3
+00:00:07,740 --> 00:00:16,540
+Our students are out every day
+
+4
+00:00:16,540 --> 00:00:24,059
+helping each other to bring home a bottle of water.
+
+5
+00:00:24,059 --> 00:00:29,620
+Everybody has a bottle, they hold it in their hands throughout the day.
+
+6
+00:00:30,580 --> 00:00:42,139
+The importance that special cones,
+
+7
+00:00:42,139 --> 00:00:44,020
+equipment, safety measures,
+
+8
+00:00:44,020 --> 00:00:47,660
+and quality of living
+
+9
+00:00:47,660 --> 00:00:48,820
+all play a role.
+
+

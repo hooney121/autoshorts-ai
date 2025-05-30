@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NewsToShorts.ai
 
-## Getting Started
+기사 URL을 입력하면 AI가 자동으로 유튜브 쇼츠를 생성해주는 웹 서비스입니다.
 
-First, run the development server:
+## 주요 기능
 
+- 기사 URL에서 본문 자동 추출
+- GPT-4를 활용한 60초 스크립트 생성
+- ElevenLabs AI 음성 합성
+- 자동 자막 생성
+- FFmpeg를 활용한 영상 합성
+
+## 기술 스택
+
+- **Frontend**: Next.js, Tailwind CSS
+- **Backend**: Node.js + Express
+- **AI 텍스트 요약**: OpenAI GPT-4
+- **음성 생성**: ElevenLabs API
+- **자막 처리**: Whisper API
+- **영상 합성**: FFmpeg
+
+## 시작하기
+
+1. 저장소 클론
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/newstoshorts.git
+cd newstoshorts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. 의존성 설치
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. 환경 변수 설정
+`.env.local` 파일을 생성하고 다음 변수들을 설정합니다:
+```
+OPENAI_API_KEY=your_openai_api_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. 개발 서버 실행
+```bash
+npm run dev
+```
 
-## Learn More
+5. 브라우저에서 확인
+```
+http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 사용 방법
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. 메인 페이지에서 "쇼츠 만들기 시작하기" 버튼 클릭
+2. 기사 URL 입력
+3. "쇼츠 생성하기" 버튼 클릭
+4. 생성된 영상 미리보기 및 다운로드
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 라이선스
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT License
