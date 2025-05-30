@@ -136,32 +136,6 @@ async function generateSubtitles(audioBuffer: Buffer): Promise<string> {
   }
 }
 
-// OpenAI DALL·E로 이미지 생성 및 다운로드 함수
-async function fetchOpenAIDalleImage(bgPath: string, prompt: string) {
-  const openaiRes = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      prompt,
-      n: 1,
-      size: '1024x1024',
-      response_format: 'url'
-    }),
-  });
-  const data = await openaiRes.json();
-  if (!data.data || !data.data[0] || !data.data[0].url) {
-    console.error('OpenAI DALL·E API Error:', data);
-    throw new Error('OpenAI에서 이미지를 생성하지 못했습니다.');
-  }
-  const imageUrl = data.data[0].url;
-  const imgRes = await fetch(imageUrl);
-  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-  fs.writeFileSync(bgPath, imgBuffer);
-}
-
 // 스크립트에서 키워드 추출 (스크립트에서 가장 많이 나온 단어를 키워드로 사용)
 function extractKeyword(script: string): string {
   const words = script.match(/\b[a-zA-Z가-힣]{3,}\b/g) || [];
@@ -188,24 +162,6 @@ async function testUnsplashKeywords(keyword: string, accessKey: string) {
     console.error('Unsplash 검색 에러:', error);
     return false;
   }
-}
-
-// 기존 fetchUnsplashImage 함수 수정
-async function fetchUnsplashImage(bgPath: string, keyword: string, accessKey: string) {
-  // 먼저 검색 가능한지 테스트
-  const isSearchable = await testUnsplashKeywords(keyword, accessKey);
-  if (!isSearchable) {
-    console.log(`키워드 "${keyword}"에 대한 이미지를 찾을 수 없어 "news"로 대체합니다.`);
-    keyword = 'news';
-  }
-
-  const url = `https://api.unsplash.com/photos/random?query=${encodeURIComponent(keyword)}&orientation=portrait&w=1080&h=1920&client_id=${accessKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!data.urls || !data.urls.full) throw new Error('이미지 검색 실패');
-  const imgRes = await fetch(data.urls.full);
-  const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-  fs.writeFileSync(bgPath, imgBuffer);
 }
 
 // Unsplash 이미지 검색 및 다운로드 (여러 이미지)
