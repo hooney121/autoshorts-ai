@@ -187,7 +187,7 @@ async function generateVideo(
   const relativeTitleSubsPath = path.relative(process.cwd(), titleSubsPath).replace(/\\/g, '/')
 
   // 이미지 파일 경로를 FFmpeg 입력으로 변환
-  const imageInputs = imagePaths.map((path, idx) => ({
+  const imageInputs = imagePaths.map((path) => ({
     path,
     duration: 10 // 각 이미지 10초
   }))

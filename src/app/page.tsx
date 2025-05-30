@@ -1,7 +1,7 @@
 "use client"
 
 import Link from 'next/link'
-import { ArrowRight, Newspaper, Star, FileText } from 'lucide-react'
+import { ArrowRight, Newspaper, FileText } from 'lucide-react'
 
 export default function Home() {
   return (
