@@ -145,25 +145,6 @@ function extractKeyword(script: string): string {
   return sorted.length ? sorted[0][0] : 'news';
 }
 
-// Unsplash 검색 가능한 키워드 테스트
-async function testUnsplashKeywords(keyword: string, accessKey: string) {
-  try {
-    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&per_page=1&client_id=${accessKey}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    console.log('Unsplash 검색 결과:', {
-      keyword,
-      total: data.total,
-      total_pages: data.total_pages,
-      results: data.results.length > 0 ? '이미지 있음' : '이미지 없음'
-    });
-    return data.total > 0;
-  } catch (error) {
-    console.error('Unsplash 검색 에러:', error);
-    return false;
-  }
-}
-
 // Unsplash 이미지 검색 및 다운로드 (여러 이미지)
 async function fetchUnsplashImages(keyword: string, accessKey: string, count: number = 6): Promise<string[]> {
   const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&per_page=${count}&orientation=portrait&w=1080&h=1920&client_id=${accessKey}`;
@@ -172,10 +153,10 @@ async function fetchUnsplashImages(keyword: string, accessKey: string, count: nu
   if (!data.results || data.results.length === 0) throw new Error('이미지 검색 실패');
   
   const imagePaths: string[] = [];
-  for (let i = 0; i < data.results.length; i++) {
-    const imgRes = await fetch(data.results[i].urls.full);
+  for (let idx = 0; idx < data.results.length; idx++) {
+    const imgRes = await fetch(data.results[idx].urls.full);
     const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-    const imgPath = path.join(process.cwd(), 'temp', `${uuidv4()}_bg_${i}.jpg`);
+    const imgPath = path.join(process.cwd(), 'temp', `${uuidv4()}_bg_${idx}.jpg`);
     fs.writeFileSync(imgPath, imgBuffer);
     imagePaths.push(imgPath);
   }
@@ -206,7 +187,7 @@ async function generateVideo(
   const relativeTitleSubsPath = path.relative(process.cwd(), titleSubsPath).replace(/\\/g, '/')
 
   // 이미지 파일 경로를 FFmpeg 입력으로 변환
-  const imageInputs = imagePaths.map((path, index) => ({
+  const imageInputs = imagePaths.map((path, idx) => ({
     path,
     duration: 10 // 각 이미지 10초
   }))
