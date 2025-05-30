@@ -156,7 +156,7 @@ async function fetchUnsplashImages(keyword: string, accessKey: string, count: nu
   for (let idx = 0; idx < data.results.length; idx++) {
     const imgRes = await fetch(data.results[idx].urls.full);
     const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-    const imgPath = path.join(process.cwd(), 'temp', `${uuidv4()}_bg_${idx}.jpg`);
+    const imgPath = path.join('/tmp', `${uuidv4()}_bg_${idx}.jpg`);
     fs.writeFileSync(imgPath, imgBuffer);
     imagePaths.push(imgPath);
   }
@@ -171,7 +171,7 @@ async function generateVideo(
   titleSubtitles: string,
   imagePaths: string[]
 ): Promise<Buffer> {
-  const tempDir = path.join(process.cwd(), 'temp')
+  const tempDir = '/tmp'
   if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir)
   const id = uuidv4()
   const audioPath = path.join(tempDir, `${id}_audio.mp3`)
@@ -298,7 +298,7 @@ export async function POST(request: Request) {
 ${title}`
 
     // 사용자 이미지 처리
-    const tempDir = path.join(process.cwd(), 'temp')
+    const tempDir = '/tmp'
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir)
     
     const userImagePaths: string[] = []
