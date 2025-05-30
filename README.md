@@ -27,7 +27,7 @@ git clone https://github.com/yourusername/newstoshorts.git
 cd newstoshorts
 ```
 
-2. 의존성 설치 1
+2. 의존성 설치 12
 ```bash
 npm install
 ```
