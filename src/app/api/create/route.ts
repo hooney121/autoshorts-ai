@@ -212,7 +212,7 @@ async function generateVideo(
   const ffmpegCommand = ffmpeg()
   
   // 이미지 입력 추가
-  imageInputs.forEach((input, i) => {
+  imageInputs.forEach((input) => {
     ffmpegCommand.input(input.path)
       .inputOptions(['-loop 1', `-t ${input.duration}`])
   })
