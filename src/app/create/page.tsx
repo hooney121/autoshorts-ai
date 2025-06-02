@@ -37,14 +37,23 @@ export default function Create() {
   })
 
   const removeImage = (index: number) => {
-    const newImages = [...images]
-    newImages.splice(index, 1)
-    setImages(newImages)
-
-    const newPreviewUrls = [...previewUrls]
-    URL.revokeObjectURL(newPreviewUrls[index])
-    newPreviewUrls.splice(index, 1)
-    setPreviewUrls(newPreviewUrls)
+    setImages(prevImages => {
+      const newImages = [...prevImages];
+      newImages.splice(index, 1);
+      return newImages;
+    });
+    setPreviewUrls(prevUrls => {
+      const newPreviewUrls = [...prevUrls];
+      if (newPreviewUrls[index]) {
+        try {
+          URL.revokeObjectURL(newPreviewUrls[index]);
+        } catch (e) {
+          // 이미 해제된 경우 무시
+        }
+      }
+      newPreviewUrls.splice(index, 1);
+      return newPreviewUrls;
+    });
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,22 +68,21 @@ export default function Create() {
       formData.append('title', title)
       images.forEach(image => formData.append('images', image))
 
-      const response = await fetch('/api/create', {
+      const response = await fetch('http://210.99.244.43:4000/generate-video', {
         method: 'POST',
         body: formData
       })
 
-      const data = await response.json()
-      if (!data.success) {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
         throw new Error(data.error || '영상 생성에 실패했습니다.')
       }
 
-      const videoBlob = new Blob(
-        [Buffer.from(data.data.videoBase64, 'base64')],
-        { type: 'video/mp4' }
-      )
-      const videoUrl = URL.createObjectURL(videoBlob)
-      setVideoUrl(videoUrl)
+      const data = await response.json()
+      if (!data.videoUrl) {
+        throw new Error('영상 파일 링크를 받지 못했습니다.')
+      }
+      setVideoUrl(data.videoUrl)
     } catch (err) {
       setError(err instanceof Error ? err.message : '영상 생성에 실패했습니다.')
     } finally {
