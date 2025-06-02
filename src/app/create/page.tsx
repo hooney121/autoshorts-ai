@@ -47,7 +47,7 @@ export default function Create() {
       if (newPreviewUrls[index]) {
         try {
           URL.revokeObjectURL(newPreviewUrls[index]);
-        } catch (e) {
+        } catch {
           // 이미 해제된 경우 무시
         }
       }
