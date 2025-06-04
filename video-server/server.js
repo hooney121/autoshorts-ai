@@ -7,7 +7,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 // ffmpeg 실행 파일 경로를 명시적으로 지정 (설치 경로에 맞게 수정)
-ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
+ffmpeg.setFfmpegPath('C:/Users/User/Desktop/news/ffmpeg.exe');
 
 const app = express();
 app.use(cors({
