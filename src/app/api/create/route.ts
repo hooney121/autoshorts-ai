@@ -3,6 +3,8 @@ import OpenAI from 'openai'
 import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
+import FormData from 'form-data'
+import fetch from 'node-fetch'
 
 // 환경 변수 설정
 const openai = new OpenAI({
@@ -114,7 +116,7 @@ async function generateSpeech(text: string): Promise<{ audioBuffer: Buffer }> {
 async function generateSubtitles(audioBuffer: Buffer): Promise<string> {
   try {
     const formData = new FormData()
-    formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), 'audio.mp3')
+    formData.append('file', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mpeg' })
     formData.append('model', 'whisper-1')
     formData.append('response_format', 'srt')
     formData.append('language', 'ko')
@@ -122,6 +124,7 @@ async function generateSubtitles(audioBuffer: Buffer): Promise<string> {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        ...formData.getHeaders(),
       },
       body: formData,
     })
@@ -145,21 +148,19 @@ function extractKeyword(script: string): string {
 }
 
 // Unsplash 이미지 검색 및 다운로드 (여러 이미지)
-async function fetchUnsplashImages(keyword: string, accessKey: string, count: number = 6): Promise<string[]> {
+async function fetchUnsplashImages(keyword: string, accessKey: string, count: number = 6): Promise<Buffer[]> {
   const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&per_page=${count}&orientation=portrait&w=1080&h=1920&client_id=${accessKey}`;
   const res = await fetch(url);
   const data = await res.json();
   if (!data.results || data.results.length === 0) throw new Error('이미지 검색 실패');
   
-  const imagePaths: string[] = [];
+  const imageBuffers: Buffer[] = [];
   for (let idx = 0; idx < data.results.length; idx++) {
     const imgRes = await fetch(data.results[idx].urls.full);
     const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-    const imgPath = path.join('/tmp', `${uuidv4()}_bg_${idx}.jpg`);
-    fs.writeFileSync(imgPath, imgBuffer);
-    imagePaths.push(imgPath);
+    imageBuffers.push(imgBuffer);
   }
-  return imagePaths;
+  return imageBuffers;
 }
 
 export async function POST(request: Request) {
@@ -201,64 +202,43 @@ export async function POST(request: Request) {
     // 3. ElevenLabs로 본문 음성 생성
     const { audioBuffer } = await generateSpeech(script)
     // 4. Whisper API로 본문 자막 생성
-    await generateSubtitles(audioBuffer)
+    const subsText = await generateSubtitles(audioBuffer)
 
     // 사용자 이미지 처리
-    const tempDir = '/tmp'
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir)
-    
-    const userImagePaths: string[] = []
+    const userImageBuffers: Buffer[] = []
     for (const image of userImages) {
       const buffer = Buffer.from(await image.arrayBuffer())
-      const imagePath = path.join(tempDir, `${uuidv4()}_user_bg.jpg`)
-      fs.writeFileSync(imagePath, buffer)
-      userImagePaths.push(imagePath)
+      userImageBuffers.push(buffer)
     }
 
     // 부족한 이미지는 Unsplash에서 가져오기
     const keyword = extractKeyword(script)
-    const remainingCount = Math.max(0, 6 - userImagePaths.length)
+    const remainingCount = Math.max(0, 6 - userImageBuffers.length)
     const unsplashImages = remainingCount > 0 
       ? await fetchUnsplashImages(keyword, process.env.UNSPLASH_ACCESS_KEY!, remainingCount)
       : []
 
-    // 모든 이미지 경로 합치기
-    const allImagePaths = [...userImagePaths, ...unsplashImages]
+    // 모든 이미지 버퍼 합치기
+    const allImageBuffers = [...userImageBuffers, ...unsplashImages]
 
     // 5. FFmpeg로 영상 생성 (video-server로 요청)
-    const videoForm = new FormData();
-    userImagePaths.forEach((imgPath) => {
-      const imgBuffer = fs.readFileSync(imgPath);
-      const imgBlob = new Blob([imgBuffer], { type: 'image/jpeg' });
-      videoForm.append('images', imgBlob, path.basename(imgPath));
-    });
-    // audioPath, subsPath, titleSubsPath는 generateVideo 함수 내에서 정의되어야 함
-    // 아래는 예시로 경로를 추정하여 작성
-    const audioPath = path.join(tempDir, `${uuidv4()}_audio.mp3`);
-    const subsPath = path.join(tempDir, `${uuidv4()}_subs.srt`);
-    const titleSubsPath = path.join(tempDir, `${uuidv4()}_title_subs.srt`);
-    const audioBufferFile = fs.readFileSync(audioPath);
-    const subsBufferFile = fs.readFileSync(subsPath);
-    const titleSubsBufferFile = fs.readFileSync(titleSubsPath);
-    videoForm.append('audio', new Blob([audioBufferFile], { type: 'audio/mp3' }), 'audio.mp3');
-    videoForm.append('subtitles', new Blob([subsBufferFile], { type: 'text/plain' }), 'subs.srt');
-    videoForm.append('titleSubtitles', new Blob([titleSubsBufferFile], { type: 'text/plain' }), 'title_subs.srt');
+    const videoForm = new FormData()
+    allImageBuffers.forEach((imgBuffer, idx) => {
+      videoForm.append('images', imgBuffer, { filename: `image_${idx}.jpg`, contentType: 'image/jpeg' })
+    })
+    videoForm.append('audio', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mp3' })
+    videoForm.append('subtitles', Buffer.from(subsText), { filename: 'subs.srt', contentType: 'text/plain' })
+    videoForm.append('titleSubtitles', Buffer.from(title), { filename: 'title_subs.srt', contentType: 'text/plain' })
 
     const videoResponse = await fetch('https://07f4-210-99-244-43.ngrok-free.app/generate-video', {
       method: 'POST',
-      body: videoForm
-    });
+      body: videoForm,
+      headers: videoForm.getHeaders(),
+    })
     if (!videoResponse.ok) {
-      throw new Error('video-server에서 영상 생성 실패');
+      throw new Error('video-server에서 영상 생성 실패')
     }
-    const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
-
-    // 임시 파일 정리
-    userImagePaths.forEach(path => fs.unlinkSync(path));
-    unsplashImages.forEach(path => fs.unlinkSync(path));
-    fs.unlinkSync(audioPath);
-    fs.unlinkSync(subsPath);
-    fs.unlinkSync(titleSubsPath);
+    const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
 
     // 영상 파일을 blob으로 반환
     return new Response(videoBuffer, {
@@ -266,7 +246,7 @@ export async function POST(request: Request) {
         'Content-Type': 'video/mp4',
         'Content-Disposition': `attachment; filename="${title || 'shorts'}.mp4"`
       }
-    });
+    })
   } catch (error) {
     console.error('Error:', error)
     return NextResponse.json(
