@@ -74,15 +74,13 @@ export default function Create() {
       })
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || '영상 생성에 실패했습니다.')
+        const data = await response.text().catch(() => '')
+        throw new Error(data ? String(data) : '영상 생성에 실패했습니다.')
       }
 
-      const data = await response.json()
-      if (!data.videoUrl) {
-        throw new Error('영상 파일 링크를 받지 못했습니다.')
-      }
-      setVideoUrl(data.videoUrl)
+      const blob = await response.blob();
+      const videoUrl = URL.createObjectURL(blob);
+      setVideoUrl(videoUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : '영상 생성에 실패했습니다.')
     } finally {
