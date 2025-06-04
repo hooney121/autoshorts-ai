@@ -163,94 +163,6 @@ async function fetchUnsplashImages(keyword: string, accessKey: string, count: nu
   return imagePaths;
 }
 
-// fluent-ffmpeg를 사용하여 영상 생성
-async function generateVideo(
-  audioBuffer: Buffer, 
-  subtitles: string, 
-  script: string, 
-  titleSubtitles: string,
-  imagePaths: string[]
-): Promise<Buffer> {
-  const tempDir = '/tmp'
-  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir)
-  const id = uuidv4()
-  const audioPath = path.join(tempDir, `${id}_audio.mp3`)
-  const subsPath = path.join(tempDir, `${id}_subs.srt`)
-  const titleSubsPath = path.join(tempDir, `${id}_title_subs.srt`)
-  const outPath = path.join(tempDir, `${id}_output.mp4`)
-  
-  fs.writeFileSync(audioPath, audioBuffer)
-  fs.writeFileSync(subsPath, subtitles, { encoding: 'utf8' })
-  fs.writeFileSync(titleSubsPath, titleSubtitles, { encoding: 'utf8' })
-  
-  const relativeSubsPath = path.relative(process.cwd(), subsPath).replace(/\\/g, '/')
-  const relativeTitleSubsPath = path.relative(process.cwd(), titleSubsPath).replace(/\\/g, '/')
-
-  // 이미지 파일 경로를 FFmpeg 입력으로 변환
-  const imageInputs = imagePaths.map((path) => ({
-    path,
-    duration: 10 // 각 이미지 10초
-  }))
-
-  // FFmpeg 필터 생성 (슬라이드+배경 구조)
-  const filter = [
-    // 각 슬라이드별 배경 생성
-    ...imageInputs.map((_, i) => `color=black:s=1080x1920[topbg${i}]`),
-    ...imageInputs.map((_, i) => `color=black:s=1080x640[botbg${i}]`),
-    // 각 이미지 처리 및 합성
-    ...imageInputs.map((_, i) => `[${i}:v]scale=1080:640[midimg${i}]`),
-    ...imageInputs.map((_, i) => `[topbg${i}][midimg${i}]overlay=0:640:shortest=1[redimg${i}]`),
-    ...imageInputs.map((_, i) => `[redimg${i}][botbg${i}]overlay=0:1280:shortest=1,scale=1080:1920,setsar=1[finalbg${i}]`),
-    // 슬라이드 연결
-    imageInputs.map((_, i) => `[finalbg${i}]`).join('') + `concat=n=${imageInputs.length}:v=1:a=0[bgv]`,
-    // 자막 추가
-    `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=15,PrimaryColour=&H0000FF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=200' [withtitle]`,
-    `[withtitle]subtitles='${relativeSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=10,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=40' [v]`
-  ].join(';')
-
-  // FFmpeg 명령어 생성
-  const ffmpegCommand = ffmpeg()
-  
-  // 이미지 입력 추가
-  imageInputs.forEach((input) => {
-    ffmpegCommand.input(input.path)
-      .inputOptions(['-loop 1', `-t ${input.duration}`])
-  })
-  
-  // 오디오 입력 추가
-  ffmpegCommand.input(audioPath)
-
-  await new Promise((resolve, reject) => {
-    ffmpegCommand
-      .complexFilter(filter)
-      .outputOptions([
-        '-map [v]',
-        '-map 6:a',
-        '-c:v libx264',
-        '-tune stillimage',
-        '-c:a aac',
-        '-b:a 192k',
-        '-pix_fmt yuv420p',
-        '-shortest'
-      ])
-      .output(outPath)
-      .on('stderr', (line) => { console.log('ffmpeg:', line) })
-      .on('end', resolve)
-      .on('error', reject)
-      .run()
-  })
-
-  const videoBuffer = fs.readFileSync(outPath)
-  
-  // 임시 파일 정리
-  fs.unlinkSync(audioPath)
-  fs.unlinkSync(subsPath)
-  fs.unlinkSync(titleSubsPath)
-  fs.unlinkSync(outPath)
-  
-  return videoBuffer
-}
-
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -321,7 +233,7 @@ ${title}`
 
     // 5. FFmpeg로 영상 생성 (video-server로 요청)
     const videoForm = new FormData();
-    userImagePaths.forEach((imgPath, idx) => {
+    userImagePaths.forEach((imgPath) => {
       const imgBuffer = fs.readFileSync(imgPath);
       const imgBlob = new Blob([imgBuffer], { type: 'image/jpeg' });
       videoForm.append('images', imgBlob, path.basename(imgPath));
