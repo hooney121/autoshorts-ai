@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import fs from 'fs'
-import path from 'path'
-import { v4 as uuidv4 } from 'uuid'
 import FormData from 'form-data'
 import fetch from 'node-fetch'
 

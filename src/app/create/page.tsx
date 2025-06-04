@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import Link from 'next/link'
 import { ArrowLeft, Upload, X } from 'lucide-react'
+import Image from 'next/image'
 
 export default function Create() {
   const [url, setUrl] = useState('')
@@ -135,10 +136,13 @@ export default function Create() {
               <div className="grid grid-cols-3 gap-4 mb-4">
                 {previewUrls.map((url, index) => (
                   <div key={index} className="relative group">
-                    <img
-                      src={url}
-                      alt={`Preview ${index + 1}`}
-                      className="w-full h-32 object-cover rounded-lg"
+                    <Image 
+                      src={url} 
+                      alt={`Preview ${index + 1}`} 
+                      width={1080} 
+                      height={1920}
+                      style={{ objectFit: 'cover' }}
+                      className="w-full h-32 rounded-lg"
                     />
                     <button
                       type="button"
