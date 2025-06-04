@@ -11,7 +11,7 @@ ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
 
 const app = express();
 app.use(cors({
-  origin: '*',
+  origin: ['https://autoshortsai.vercel.app', 'http://localhost:3000'],
   methods: ['GET', 'POST'],
 }));
 const upload = multer({ dest: 'uploads/' });
