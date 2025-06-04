@@ -319,24 +319,48 @@ ${title}`
     // 모든 이미지 경로 합치기
     const allImagePaths = [...userImagePaths, ...unsplashImages]
 
-    // 5. FFmpeg로 영상 생성
-    const videoBuffer = await generateVideo(audioBuffer, subtitles, script, titleSubtitleContent, allImagePaths)
+    // 5. FFmpeg로 영상 생성 (video-server로 요청)
+    const videoForm = new FormData();
+    userImagePaths.forEach((imgPath, idx) => {
+      const imgBuffer = fs.readFileSync(imgPath);
+      const imgBlob = new Blob([imgBuffer], { type: 'image/jpeg' });
+      videoForm.append('images', imgBlob, path.basename(imgPath));
+    });
+    // audioPath, subsPath, titleSubsPath는 generateVideo 함수 내에서 정의되어야 함
+    // 아래는 예시로 경로를 추정하여 작성
+    const audioPath = path.join(tempDir, `${uuidv4()}_audio.mp3`);
+    const subsPath = path.join(tempDir, `${uuidv4()}_subs.srt`);
+    const titleSubsPath = path.join(tempDir, `${uuidv4()}_title_subs.srt`);
+    const audioBufferFile = fs.readFileSync(audioPath);
+    const subsBufferFile = fs.readFileSync(subsPath);
+    const titleSubsBufferFile = fs.readFileSync(titleSubsPath);
+    videoForm.append('audio', new Blob([audioBufferFile], { type: 'audio/mp3' }), 'audio.mp3');
+    videoForm.append('subtitles', new Blob([subsBufferFile], { type: 'text/plain' }), 'subs.srt');
+    videoForm.append('titleSubtitles', new Blob([titleSubsBufferFile], { type: 'text/plain' }), 'title_subs.srt');
+
+    const videoResponse = await fetch('https://07f4-210-99-244-43.ngrok-free.app/generate-video', {
+      method: 'POST',
+      body: videoForm
+    });
+    if (!videoResponse.ok) {
+      throw new Error('video-server에서 영상 생성 실패');
+    }
+    const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
 
     // 임시 파일 정리
-    userImagePaths.forEach(path => fs.unlinkSync(path))
-    unsplashImages.forEach(path => fs.unlinkSync(path))
+    userImagePaths.forEach(path => fs.unlinkSync(path));
+    unsplashImages.forEach(path => fs.unlinkSync(path));
+    fs.unlinkSync(audioPath);
+    fs.unlinkSync(subsPath);
+    fs.unlinkSync(titleSubsPath);
 
-    // 영상 파일을 base64로 반환
-    const videoBase64 = videoBuffer.toString('base64')
-    return NextResponse.json({
-      success: true,
-      data: {
-        script,
-        subtitles,
-        videoBase64,
-        title
+    // 영상 파일을 blob으로 반환
+    return new Response(videoBuffer, {
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Content-Disposition': `attachment; filename="${title || 'shorts'}.mp4"`
       }
-    })
+    });
   } catch (error) {
     console.error('Error:', error)
     return NextResponse.json(
