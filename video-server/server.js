@@ -14,7 +14,17 @@ app.use(cors({
   origin: ['https://autoshortsai.vercel.app', 'http://localhost:3000'],
   methods: ['GET', 'POST'],
 }));
-const upload = multer({ dest: 'uploads/' });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, uuidv4() + ext);
+  }
+});
+const upload = multer({ storage });
 
 app.post('/generate-video', upload.array('images', 6), async (req, res) => {
   try {
@@ -30,6 +40,9 @@ app.post('/generate-video', upload.array('images', 6), async (req, res) => {
     req.files.forEach(file => command.input(file.path));
 
     command
+      .on('start', commandLine => {
+        console.log('Spawned FFmpeg with command:', commandLine);
+      })
       .on('end', () => {
         res.download(outputPath, () => {
           fs.unlinkSync(outputPath);
