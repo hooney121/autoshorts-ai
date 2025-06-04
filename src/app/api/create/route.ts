@@ -201,12 +201,7 @@ export async function POST(request: Request) {
     // 3. ElevenLabs로 본문 음성 생성
     const { audioBuffer } = await generateSpeech(script)
     // 4. Whisper API로 본문 자막 생성
-    const subtitles = await generateSubtitles(audioBuffer)
-
-    // 제목 자막 생성 (전체 시간 동안 표시)
-    const titleSubtitleContent = `1
-00:00:00,000 --> 00:59:59,999
-${title}`
+    await generateSubtitles(audioBuffer)
 
     // 사용자 이미지 처리
     const tempDir = '/tmp'
