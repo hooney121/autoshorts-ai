@@ -68,7 +68,7 @@ export default function Create() {
       formData.append('title', title)
       images.forEach(image => formData.append('images', image))
 
-      const response = await fetch('https://17e4-79-110-55-11.ngrok-free.app/generate-video', {
+      const response = await fetch('https://cbd-210-99-244-43.ngrok-free.app/generate-video', {
         method: 'POST',
         body: formData
       })

@@ -10,7 +10,10 @@ const { v4: uuidv4 } = require('uuid');
 ffmpeg.setFfmpegPath('C:/ffmpeg/bin/ffmpeg.exe');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+}));
 const upload = multer({ dest: 'uploads/' });
 
 app.post('/generate-video', upload.array('images', 6), async (req, res) => {
