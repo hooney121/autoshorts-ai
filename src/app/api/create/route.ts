@@ -11,7 +11,11 @@ const openai = new OpenAI({
 // 기사 본문 추출 및 길이 제한
 async function extractArticleContent(url: string): Promise<string> {
   try {
-    const response = await fetch(url)
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    })
     const html = await response.text()
     let content = html
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
@@ -36,7 +40,7 @@ async function extractArticleContent(url: string): Promise<string> {
       const summarizedChunks = await Promise.all(
         chunks.map(async (chunk) => {
           const summaryResponse = await openai.chat.completions.create({
-            model: 'gpt-4',
+            model: 'gpt-3.5-turbo',
             messages: [
               {
                 role: 'system',
@@ -58,7 +62,7 @@ async function extractArticleContent(url: string): Promise<string> {
       // 최종 요약이 여전히 2000자를 초과하는 경우 한 번 더 요약
       if (content.length > 2000) {
         const finalSummaryResponse = await openai.chat.completions.create({
-          model: 'gpt-4',
+          model: 'gpt-3.5-turbo',
           messages: [
             {
               role: 'system',
@@ -179,7 +183,7 @@ export async function POST(request: Request) {
 
     // 2. GPT로 60초 스크립트 생성
     const scriptResponse = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
@@ -219,18 +223,19 @@ export async function POST(request: Request) {
     const allImageBuffers = [...userImageBuffers, ...unsplashImages]
 
     // 5. FFmpeg로 영상 생성 (video-server로 요청)
-    const videoForm = new FormData()
+    const videoFormData = new FormData()
     allImageBuffers.forEach((imgBuffer, idx) => {
-      videoForm.append('images', imgBuffer, { filename: `image_${idx}.jpg`, contentType: 'image/jpeg' })
+      videoFormData.append('images', imgBuffer, { filename: `image_${idx}.jpg`, contentType: 'image/jpeg' })
     })
-    videoForm.append('audio', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mp3' })
-    videoForm.append('subtitles', Buffer.from(subsText), { filename: 'subs.srt', contentType: 'text/plain' })
-    videoForm.append('titleSubtitles', Buffer.from(title), { filename: 'title_subs.srt', contentType: 'text/plain' })
+    videoFormData.append('audio', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mp3' })
+    videoFormData.append('subtitles', Buffer.from(subsText), { filename: 'subtitles.srt', contentType: 'application/x-subrip' })
+    videoFormData.append('title', title)
 
-    const videoResponse = await fetch('https://07f4-210-99-244-43.ngrok-free.app/generate-video', {
+    // 6. 비디오 생성 서버로 데이터 전송
+    const videoResponse = await fetch('https://ec99-116-123-195-203.ngrok-free.app/generate-video', {
       method: 'POST',
-      body: videoForm,
-      headers: videoForm.getHeaders(),
+      body: videoFormData,
+      headers: videoFormData.getHeaders(),
     })
     if (!videoResponse.ok) {
       throw new Error('video-server에서 영상 생성 실패')

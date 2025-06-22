@@ -5,11 +5,20 @@ const ffmpeg = require('fluent-ffmpeg');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
+const os = require('os');
 
 // ffmpeg 실행 파일 경로를 명시적으로 지정 (설치 경로에 맞게 수정)
 ffmpeg.setFfmpegPath('C:/Users/User/Desktop/news/ffmpeg.exe');
 
 const app = express();
+
+// 요청 로깅 미들웨어 추가
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] Received: ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(cors({
   origin: ['https://autoshortsai.vercel.app', 'http://localhost:3000'],
   methods: ['GET', 'POST'],
@@ -31,84 +40,91 @@ app.post('/generate-video', upload.fields([
   { name: 'images', maxCount: 6 },
   { name: 'audio', maxCount: 1 },
   { name: 'subtitles', maxCount: 1 },
-  { name: 'titleSubtitles', maxCount: 1 }
+  { name: 'title', maxCount: 1 }
 ]), async (req, res) => {
   try {
     if (!req.files || !req.files.images || req.files.images.length === 0) {
       return res.status(400).json({ error: '이미지가 업로드되지 않았습니다.' });
     }
 
+    // 임시 폴더 생성
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'video-images-'));
+    const imagesNeeded = 6;
+    let allImages = req.files.images.map((file, idx) => {
+      const dest = path.join(tempDir, `${idx + 1}.jpg`);
+      fs.copyFileSync(file.path, dest);
+      return dest;
+    });
+
+    // 부족한 이미지는 Unsplash에서 다운로드
+    for (let i = allImages.length; i < imagesNeeded; i++) {
+      const url = `https://source.unsplash.com/random/1080x1920?sig=${i}`;
+      const dest = path.join(tempDir, `${i + 1}.jpg`);
+      const response = await axios({ url, responseType: 'stream' });
+      await new Promise((resolve, reject) => {
+        const writer = fs.createWriteStream(dest);
+        response.data.pipe(writer);
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+      allImages.push(dest);
+    }
+
+    // 오디오 파일 준비
+    const audioFile = req.files.audio && req.files.audio[0] ? path.resolve(req.files.audio[0].path) : null;
+    if (!audioFile) {
+      return res.status(400).json({ error: '오디오 파일이 업로드되지 않았습니다.' });
+    }
+
     // outputs 폴더를 C:/Users/User/Desktop/outputs로 고정
     const outputsDir = 'C:/Users/User/Desktop/outputs';
     if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir);
-    let outputPath = path.join(outputsDir, `${uuidv4()}.mp4`);
+    const firstOutputPath = path.join(outputsDir, `${uuidv4()}-no-subs.mp4`);
+    const finalOutputPath = path.join(outputsDir, `${uuidv4()}.mp4`);
 
-    const command = ffmpeg();
+    // 1차: 슬라이드쇼 + 오디오 영상 생성
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(path.join(tempDir, '%d.jpg'))
+        .input(audioFile)
+        .inputOptions(['-framerate 1'])
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .outputOptions('-shortest')
+        .on('end', resolve)
+        .on('error', reject)
+        .save(firstOutputPath);
+    });
 
-    // uploadsDir를 절대경로로
-    // const uploadsDir = path.resolve('uploads'); // 필요시 사용
-
-    // 각 파일의 경로를 절대경로로 변환
-    const imageFiles = req.files.images.map(file => ({ ...file, path: path.resolve(file.path) }));
-    const audioFile = req.files.audio && req.files.audio[0] ? { ...req.files.audio[0], path: path.resolve(req.files.audio[0].path) } : null;
-    const subtitleFile = req.files.subtitles && req.files.subtitles[0] ? { ...req.files.subtitles[0], path: path.resolve(req.files.subtitles[0].path) } : null;
-    const titleSubtitleFile = req.files.titleSubtitles && req.files.titleSubtitles[0] ? { ...req.files.titleSubtitles[0], path: path.resolve(req.files.titleSubtitles[0].path) } : null;
-
-    imageFiles.forEach(file => command.input(file.path));
-    if (audioFile) command.input(audioFile.path);
-
-    // 이미지 전환 시간 계산 (오디오 길이를 이미지 수로 나눔)
-    const audioDuration = 60; // 예상 오디오 길이 (초)
-    const imageCount = imageFiles.length;
-    const transitionDuration = audioDuration / imageCount;
-
-    let filterComplex = '';
-    filterComplex += imageFiles.map((_, i) =>
-      `[${i}:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1[v${i}];`
-    ).join('');
-    filterComplex += imageFiles.map((_, i) => `[v${i}]`).join('') + `concat=n=${imageCount}:v=1:a=0[outv];`;
-
-    let lastVideoLabel = '[outv]';
-    if (subtitleFile && subtitleFile.size > 100) {
-      const subtitlePathForFilter = subtitleFile.path.replace(/\\/g, '/');
-      filterComplex += `${lastVideoLabel}subtitles='${subtitlePathForFilter}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'[v1];`;
-      lastVideoLabel = '[v1]';
-    }
-    if (titleSubtitleFile && titleSubtitleFile.size > 100) {
-      const titleSubtitlePathForFilter = titleSubtitleFile.path.replace(/\\/g, '/');
-      filterComplex += `${lastVideoLabel}subtitles='${titleSubtitlePathForFilter}':force_style='FontName=Arial,FontSize=36,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=2'[v2];`;
-      lastVideoLabel = '[v2]';
+    // 2차: 자막 입히기 (있을 때만)
+    let outputPath = firstOutputPath;
+    const subtitleFile = req.files.subtitles && req.files.subtitles[0] ? path.resolve(req.files.subtitles[0].path) : null;
+    if (subtitleFile && fs.statSync(subtitleFile).size > 100) {
+      await new Promise((resolve, reject) => {
+        ffmpeg()
+          .input(firstOutputPath)
+          .outputOptions([`-vf subtitles='${subtitleFile.replace(/\\/g, '/')}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'`])
+          .on('end', resolve)
+          .on('error', reject)
+          .save(finalOutputPath);
+      });
+      outputPath = finalOutputPath;
     }
 
-    // 오디오 입력 인덱스 계산 (이미지 개수만큼 입력 후 오디오)
-    const audioInputIndex = imageFiles.length;
-
-    command
-      .on('start', commandLine => {
-        console.log('Spawned FFmpeg with command:', commandLine);
-      })
-      .on('end', () => {
-        res.download(outputPath, () => {
-          fs.unlinkSync(outputPath);
-          Object.values(req.files).forEach(files => {
-            files.forEach(file => fs.unlinkSync(file.path));
-          });
+    // 결과 파일 전송 및 임시 파일 정리
+    res.download(outputPath, () => {
+      try {
+        fs.unlinkSync(firstOutputPath);
+        if (outputPath !== firstOutputPath) fs.unlinkSync(finalOutputPath);
+        allImages.forEach(img => fs.unlinkSync(img));
+        fs.rmdirSync(tempDir);
+        Object.values(req.files).forEach(files => {
+          files.forEach(file => fs.unlinkSync(file.path));
         });
-      })
-      .on('error', err => {
-        console.error('ffmpeg error:', err.message, 'input files:', req.files);
-        res.status(500).json({ error: '영상 생성 중 오류가 발생했습니다: ' + err.message });
-      })
-      .videoCodec('libx264')
-      .videoBitrate('2000k')
-      // .size('1080x1920') // filter_complex에서만 스케일 적용
-      .fps(30)
-      .audioCodec('aac')
-      .audioBitrate('192k')
-      .complexFilter(filterComplex, [lastVideoLabel.replace(/\[|\]/g, '')])
-      .outputOptions(`-map ${audioInputIndex}:a`)
-      .save(outputPath);
+      } catch (e) { /* 무시 */ }
+    });
   } catch (err) {
+    console.error("Error processing video:", err);
     res.status(500).json({ error: err.message });
   }
 });
