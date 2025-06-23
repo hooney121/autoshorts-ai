@@ -7,34 +7,33 @@ import { ArrowLeft, Upload, X } from 'lucide-react'
 import Image from 'next/image'
 
 export default function Create() {
-  const [url, setUrl] = useState('')
+  const [newsUrl, setNewsUrl] = useState('')
   const [title, setTitle] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [videoUrl, setVideoUrl] = useState('')
   const [images, setImages] = useState<File[]>([])
-  const [previewUrls, setPreviewUrls] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [progress, setProgress] = useState<string>('')
+
+  const MAX_IMAGES = 6
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length + images.length > 6) {
+    if (acceptedFiles.length + images.length > MAX_IMAGES) {
       setError('최대 6개의 이미지만 업로드할 수 있습니다.')
       return
     }
 
     const newImages = [...images, ...acceptedFiles]
     setImages(newImages)
-
-    const newPreviewUrls = acceptedFiles.map(file => URL.createObjectURL(file))
-    setPreviewUrls([...previewUrls, ...newPreviewUrls])
-  }, [images, previewUrls])
+  }, [images])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.gif']
     },
-    maxFiles: 6,
-    disabled: images.length >= 6
+    maxFiles: MAX_IMAGES,
+    disabled: images.length >= MAX_IMAGES
   })
 
   const removeImage = (index: number) => {
@@ -43,50 +42,61 @@ export default function Create() {
       newImages.splice(index, 1);
       return newImages;
     });
-    setPreviewUrls(prevUrls => {
-      const newPreviewUrls = [...prevUrls];
-      if (newPreviewUrls[index]) {
-        try {
-          URL.revokeObjectURL(newPreviewUrls[index]);
-        } catch {
-          // 이미 해제된 경우 무시
-        }
-      }
-      newPreviewUrls.splice(index, 1);
-      return newPreviewUrls;
-    });
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError('')
-    setVideoUrl('')
+    if (!newsUrl || !title) {
+      setError('Please provide both a news URL and a title.')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+    setVideoUrl(null)
+    setProgress('Initializing video generation...')
+
+    // NOTE: Replace with your actual ngrok URL
+    const videoServerUrl = 'https://768e-116-123-195-203.ngrok-free.app/generate-video'
+
+    const formData = new FormData()
+    formData.append('newsUrl', newsUrl)
+    formData.append('title', title)
+    images.forEach((image) => {
+      formData.append('images', image)
+    })
 
     try {
-      const formData = new FormData()
-      formData.append('url', url)
-      formData.append('title', title)
-      images.forEach(image => formData.append('images', image))
-
-      const response = await fetch('/api/create', {
+      setProgress('Uploading data and starting process...')
+      const response = await fetch(videoServerUrl, {
         method: 'POST',
-        body: formData
+        body: formData,
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.error || `영상 생성에 실패했습니다. (상태 코드: ${response.status})`;
-        throw new Error(errorMessage);
+        const errData = await response.json()
+        throw new Error(errData.error || 'Failed to generate video.')
       }
 
-      const blob = await response.blob();
-      const videoUrl = URL.createObjectURL(blob);
-      setVideoUrl(videoUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '영상 생성에 실패했습니다.')
+      setProgress('Video generated! Downloading...')
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      setVideoUrl(url)
+
+      // Trigger download
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${title.replace(/[^a-z0-9]/gi, '_')}.mp4`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+    } catch (err: any) {
+      setError(err.message)
     } finally {
-      setLoading(false)
+      setIsLoading(false)
+      setProgress('')
     }
   }
 
@@ -110,8 +120,8 @@ export default function Create() {
               <label className="block text-sm font-medium text-gray-700 mb-2">뉴스 URL</label>
               <input
                 type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                value={newsUrl}
+                onChange={(e) => setNewsUrl(e.target.value)}
                 className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 placeholder="https://news.example.com/article"
                 required
@@ -135,10 +145,10 @@ export default function Create() {
                 이미지 업로드 (최대 6개)
               </label>
               <div className="grid grid-cols-3 gap-4 mb-4">
-                {previewUrls.map((url, index) => (
+                {images.map((image, index) => (
                   <div key={index} className="relative group">
                     <Image 
-                      src={url} 
+                      src={URL.createObjectURL(image)} 
                       alt={`Preview ${index + 1}`} 
                       width={1080} 
                       height={1920}
@@ -160,7 +170,7 @@ export default function Create() {
                 {...getRootProps()}
                 className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
                   ${isDragActive ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-red-500 hover:bg-red-50'}
-                  ${images.length >= 6 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  ${images.length >= MAX_IMAGES ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <input {...getInputProps()} />
                 <div className="space-y-2">
@@ -179,22 +189,22 @@ export default function Create() {
                 </div>
               </div>
               <p className="text-sm text-gray-500 mt-2">
-                {images.length}/6 이미지 업로드됨
+                {images.length}/{MAX_IMAGES} 이미지 업로드됨
               </p>
             </div>
 
             <button
               type="submit"
-              disabled={loading || !url || !title}
+              disabled={isLoading || !newsUrl || !title}
               className="w-full bg-red-600 text-white p-4 rounded-lg font-medium hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-sm hover:shadow-md"
             >
-              {loading ? (
+              {isLoading ? (
                 <div className="flex items-center justify-center">
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  처리 중...
+                  {progress}
                 </div>
               ) : (
                 '영상 생성하기'
@@ -219,7 +229,7 @@ export default function Create() {
                   onClick={() => {
                     const a = document.createElement('a')
                     a.href = videoUrl
-                    a.download = `${title || 'shorts'}.mp4`
+                    a.download = `${title.replace(/[^a-z0-9]/gi, '_')}.mp4`
                     document.body.appendChild(a)
                     a.click()
                     document.body.removeChild(a)
