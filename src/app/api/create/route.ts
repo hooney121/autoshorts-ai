@@ -237,7 +237,7 @@ export async function POST(request: Request) {
     videoFormData.append('title', title)
 
     // 6. 비디오 생성 서버로 데이터 전송
-    const videoResponse = await fetch('https://b603-116-123-195-203.ngrok-free.app/generate-video', {
+    const videoResponse = await fetch('https://768e-116-123-195-203.ngrok-free.app/generate-video', {
       method: 'POST',
       body: videoFormData,
       headers: videoFormData.getHeaders(),

@@ -92,26 +92,27 @@ app.post('/generate-video', upload.fields([
     await new Promise((resolve, reject) => {
       const command = ffmpeg();
       
-      // 입력: 이미지 시퀀스
-      command.input('*.jpg').inputOptions(['-pattern_type', 'glob', '-framerate', '1/3']);
+      // 입력: 이미지 시퀀스 (절대 경로 사용)
+      command.input(path.join(tempDir, '*.jpg')).inputOptions(['-pattern_type', 'glob', '-framerate', '1/3']);
       
-      // 입력: 오디오 (상대 경로로 수정)
-      command.input(path.relative(tempDir, audioFile));
+      // 입력: 오디오 (절대 경로 사용)
+      command.input(audioFile);
 
-      // 필터: 자막 (있을 경우)
+      // 필터: 자막 (있을 경우, 절대 경로 사용 및 이스케이프)
       const subtitleFile = req.files.subtitles && req.files.subtitles[0] ? req.files.subtitles[0] : null;
       if (subtitleFile) {
-        // 자막 파일을 임시 폴더로 옮기고 상대 경로 사용
+        // 자막 파일을 임시 폴더로 옮김
         const srtName = 'subtitles.srt';
         const srtTempPath = path.join(tempDir, srtName);
         fs.renameSync(subtitleFile.path, srtTempPath);
 
-        const filterString = `subtitles=${srtName}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'`;
+        // Windows 경로를 ffmpeg 필터에 맞게 이스케이프: C:\... -> C\:\\...
+        const escapedSrtPath = srtTempPath.replace(/\\/g, '\\\\').replace(/:/g, '\\:');
+        const filterString = `subtitles=${escapedSrtPath}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'`;
         command.videoFilter(filterString);
       }
 
       command
-        .cwd(tempDir)
         .videoCodec('libx264')
         .audioCodec('aac')
         .outputOptions('-shortest')
