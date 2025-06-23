@@ -56,8 +56,8 @@ export default function Create() {
     setVideoUrl(null)
     setProgress('Initializing video generation...')
 
-    // NOTE: Replace with your actual ngrok URL
-    const videoServerUrl = 'https://768e-116-123-195-203.ngrok-free.app/generate-video'
+    // Using the new permanent ngrok domain
+    const videoServerUrl = 'https://onminds.ngrok.app/generate-video'
 
     const formData = new FormData()
     formData.append('newsUrl', newsUrl)
