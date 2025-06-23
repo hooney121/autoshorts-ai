@@ -248,11 +248,16 @@ export async function POST(request: Request) {
     const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
 
     // 영상 파일을 blob으로 반환
+    const finalTitle = title || 'shorts';
+    // RFC 5987에 따라 파일 이름을 안전하게 인코딩
+    const encodedTitle = encodeURIComponent(finalTitle);
+
     return new Response(videoBuffer, {
       headers: {
         'Content-Type': 'video/mp4',
-        'Content-Disposition': `attachment; filename="${title || 'shorts'}.mp4"`
-      }
+        // 호환성을 위해 fallback 파일명과 UTF-8 인코딩 파일명을 모두 제공
+        'Content-Disposition': `attachment; filename="video.mp4"; filename*=UTF-8''${encodedTitle}.mp4`,
+      },
     })
   } catch (error) {
     console.error('Error:', error)

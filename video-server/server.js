@@ -90,32 +90,54 @@ app.post('/generate-video', upload.fields([
 
     // 영상 생성 (이미지, 오디오, 자막을 한 번에 처리)
     await new Promise((resolve, reject) => {
+      // 1. ffmpeg concat demuxer를 위한 파일 리스트 생성
+      const filelistPath = path.join(tempDir, 'filelist.txt');
+      const imageDuration = 3; // 각 이미지 노출 시간 (초), framerate 1/3와 동일
+      const fileContent = allImages.map(imgPath => {
+          // Windows 경로('\\')를 ffmpeg가 인식할 수 있도록 '/'로 변경
+          const ffmpegPath = imgPath.replace(/\\/g, '/');
+          return `file '${ffmpegPath}'\nduration ${imageDuration}`;
+      }).join('\n');
+      fs.writeFileSync(filelistPath, fileContent);
+
       const command = ffmpeg();
-      
-      // 입력: 이미지 시퀀스 (절대 경로 사용)
-      command.input(path.join(tempDir, '*.jpg')).inputOptions(['-pattern_type', 'glob', '-framerate', '1/3']);
+
+      // 입력: 이미지 시퀀스 (concat demuxer 사용)
+      command.input(filelistPath).inputOptions(['-f', 'concat', '-safe', '0']);
       
       // 입력: 오디오 (절대 경로 사용)
       command.input(audioFile);
 
-      // 필터: 자막 (있을 경우, 절대 경로 사용 및 이스케이프)
+      // 자막과 해상도 조절 필터 복원
       const subtitleFile = req.files.subtitles && req.files.subtitles[0] ? req.files.subtitles[0] : null;
+      const filters = [];
       if (subtitleFile) {
         // 자막 파일을 임시 폴더로 옮김
         const srtName = 'subtitles.srt';
         const srtTempPath = path.join(tempDir, srtName);
         fs.renameSync(subtitleFile.path, srtTempPath);
 
-        // Windows 경로를 ffmpeg 필터에 맞게 이스케이프: C:\... -> C\:\\...
+        // Windows 경로를 ffmpeg 필터에 맞게 이스케이프
         const escapedSrtPath = srtTempPath.replace(/\\/g, '\\\\').replace(/:/g, '\\:');
-        const filterString = `subtitles=${escapedSrtPath}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'`;
-        command.videoFilter(filterString);
+        filters.push(`subtitles=${escapedSrtPath}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'`);
       }
+      // 해상도 조절 필터 추가
+      filters.push('scale=1080:1920');
+      // 복합 필터를 사용하여 필터 체인 직접 구성
+      command.complexFilter(`[0:v]${filters.join(',')}[v]`);
 
       command
-        .videoCodec('libx264')
-        .audioCodec('aac')
-        .outputOptions('-shortest')
+        .outputOptions([
+          '-map', '[v]',      // 필터링된 비디오 스트림 선택
+          '-map', '1:a',      // 원본 오디오 스트림 선택
+          '-c:v', 'libx264',  
+          '-c:a', 'aac',      
+          '-pix_fmt', 'yuv420p',
+          '-shortest'
+        ])
+        .on('start', (commandLine) => {
+          console.log('ffmpeg command:', commandLine);
+        })
         .on('end', resolve)
         .on('error', (err) => {
           console.error('ffmpeg final video error:', err.message);
@@ -130,21 +152,26 @@ app.post('/generate-video', upload.fields([
       if (err) {
         console.error('Download error:', err);
       }
-      try {
-        fs.unlinkSync(finalOutputPath);
-        // 임시 폴더와 그 안의 파일들을 삭제
-        fs.rmdirSync(tempDir, { recursive: true });
-        // multer가 업로드한 원본 파일들 삭제
-        Object.values(req.files).forEach(files => {
-          files.forEach(file => {
-            try {
-              fs.unlinkSync(file.path);
-            } catch (e) { /* 무시 */ }
+      
+      // 파일 핸들이 해제될 시간을 주기 위해 약간의 딜레이 후 정리
+      setTimeout(() => {
+        try {
+          // 임시 폴더와 그 안의 파일들을 삭제 (최신 방식으로 변경)
+          fs.rmSync(tempDir, { recursive: true, force: true });
+          // multer가 업로드한 원본 파일들 삭제
+          Object.values(req.files).forEach(files => {
+            files.forEach(file => {
+              try {
+                fs.unlinkSync(file.path);
+              } catch (e) { /* 무시 */ }
+            });
           });
-        });
-      } catch (e) { 
-        console.error('Cleanup error:', e);
-      }
+           // 최종 비디오 파일 삭제
+          fs.unlinkSync(finalOutputPath);
+        } catch (e) { 
+          console.error('Cleanup error:', e);
+        }
+      }, 500); // 0.5초 딜레이
     });
   } catch (err) {
     console.error("Error processing video:", err);
