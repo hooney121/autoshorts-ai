@@ -75,8 +75,9 @@ export default function Create() {
       })
 
       if (!response.ok) {
-        const data = await response.text().catch(() => '')
-        throw new Error(data ? String(data) : '영상 생성에 실패했습니다.')
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.error || `영상 생성에 실패했습니다. (상태 코드: ${response.status})`;
+        throw new Error(errorMessage);
       }
 
       const blob = await response.blob();

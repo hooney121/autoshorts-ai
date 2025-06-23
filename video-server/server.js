@@ -11,6 +11,12 @@ const os = require('os');
 // ffmpeg 실행 파일 경로를 명시적으로 지정 (설치 경로에 맞게 수정)
 ffmpeg.setFfmpegPath('C:/Users/User/Desktop/news/ffmpeg.exe');
 
+// uploads 폴더 생성
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+
 const app = express();
 
 // 요청 로깅 미들웨어 추가
@@ -26,7 +32,7 @@ app.use(cors({
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, path.join(__dirname, 'uploads'));
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -51,8 +57,9 @@ app.post('/generate-video', upload.fields([
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'video-images-'));
     const imagesNeeded = 6;
     let allImages = req.files.images.map((file, idx) => {
+      const sourcePath = file.path; // multer가 저장한 실제 파일 경로
       const dest = path.join(tempDir, `${idx + 1}.jpg`);
-      fs.copyFileSync(file.path, dest);
+      fs.copyFileSync(sourcePath, dest);
       return dest;
     });
 
@@ -79,49 +86,64 @@ app.post('/generate-video', upload.fields([
     // outputs 폴더를 C:/Users/User/Desktop/outputs로 고정
     const outputsDir = 'C:/Users/User/Desktop/outputs';
     if (!fs.existsSync(outputsDir)) fs.mkdirSync(outputsDir);
-    const firstOutputPath = path.join(outputsDir, `${uuidv4()}-no-subs.mp4`);
     const finalOutputPath = path.join(outputsDir, `${uuidv4()}.mp4`);
 
-    // 1차: 슬라이드쇼 + 오디오 영상 생성
+    // 영상 생성 (이미지, 오디오, 자막을 한 번에 처리)
     await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(path.join(tempDir, '%d.jpg'))
-        .input(audioFile)
-        .inputOptions(['-framerate 1'])
+      const command = ffmpeg();
+      
+      // 입력: 이미지 시퀀스
+      command.input('*.jpg').inputOptions(['-pattern_type', 'glob', '-framerate', '1/3']);
+      
+      // 입력: 오디오 (상대 경로로 수정)
+      command.input(path.relative(tempDir, audioFile));
+
+      // 필터: 자막 (있을 경우)
+      const subtitleFile = req.files.subtitles && req.files.subtitles[0] ? req.files.subtitles[0] : null;
+      if (subtitleFile) {
+        // 자막 파일을 임시 폴더로 옮기고 상대 경로 사용
+        const srtName = 'subtitles.srt';
+        const srtTempPath = path.join(tempDir, srtName);
+        fs.renameSync(subtitleFile.path, srtTempPath);
+
+        const filterString = `subtitles=${srtName}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'`;
+        command.videoFilter(filterString);
+      }
+
+      command
+        .cwd(tempDir)
         .videoCodec('libx264')
         .audioCodec('aac')
         .outputOptions('-shortest')
         .on('end', resolve)
-        .on('error', reject)
-        .save(firstOutputPath);
+        .on('error', (err) => {
+          console.error('ffmpeg final video error:', err.message);
+          reject(err);
+        })
+        .save(finalOutputPath)
+        .run(); // ffmpeg 실행
     });
-
-    // 2차: 자막 입히기 (있을 때만)
-    let outputPath = firstOutputPath;
-    const subtitleFile = req.files.subtitles && req.files.subtitles[0] ? path.resolve(req.files.subtitles[0].path) : null;
-    if (subtitleFile && fs.statSync(subtitleFile).size > 100) {
-      await new Promise((resolve, reject) => {
-        ffmpeg()
-          .input(firstOutputPath)
-          .outputOptions([`-vf subtitles='${subtitleFile.replace(/\\/g, '/')}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=1'`])
-          .on('end', resolve)
-          .on('error', reject)
-          .save(finalOutputPath);
-      });
-      outputPath = finalOutputPath;
-    }
-
+    
     // 결과 파일 전송 및 임시 파일 정리
-    res.download(outputPath, () => {
+    res.download(finalOutputPath, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+      }
       try {
-        fs.unlinkSync(firstOutputPath);
-        if (outputPath !== firstOutputPath) fs.unlinkSync(finalOutputPath);
-        allImages.forEach(img => fs.unlinkSync(img));
-        fs.rmdirSync(tempDir);
+        fs.unlinkSync(finalOutputPath);
+        // 임시 폴더와 그 안의 파일들을 삭제
+        fs.rmdirSync(tempDir, { recursive: true });
+        // multer가 업로드한 원본 파일들 삭제
         Object.values(req.files).forEach(files => {
-          files.forEach(file => fs.unlinkSync(file.path));
+          files.forEach(file => {
+            try {
+              fs.unlinkSync(file.path);
+            } catch (e) { /* 무시 */ }
+          });
         });
-      } catch (e) { /* 무시 */ }
+      } catch (e) { 
+        console.error('Cleanup error:', e);
+      }
     });
   } catch (err) {
     console.error("Error processing video:", err);

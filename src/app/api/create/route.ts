@@ -16,6 +16,11 @@ async function extractArticleContent(url: string): Promise<string> {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     })
+
+    if (!response.ok) {
+      throw new Error(`뉴스 기사를 가져오는데 실패했습니다. (상태 코드: ${response.status}) URL을 확인해주세요.`);
+    }
+
     const html = await response.text()
     let content = html
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
@@ -232,7 +237,7 @@ export async function POST(request: Request) {
     videoFormData.append('title', title)
 
     // 6. 비디오 생성 서버로 데이터 전송
-    const videoResponse = await fetch('https://ec99-116-123-195-203.ngrok-free.app/generate-video', {
+    const videoResponse = await fetch('https://b603-116-123-195-203.ngrok-free.app/generate-video', {
       method: 'POST',
       body: videoFormData,
       headers: videoFormData.getHeaders(),
