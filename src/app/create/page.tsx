@@ -66,7 +66,7 @@ export default function Create() {
       formData.append('title', title)
       
       // 이미지 파일들 추가
-      images.forEach((image, index) => {
+      images.forEach((image) => {
         formData.append('images', image)
       })
 

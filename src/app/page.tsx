@@ -1,6 +1,7 @@
 "use client"
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowRight, Newspaper, FileText, Play, Sparkles, Zap, TrendingUp, Check, Star, User, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useState } from 'react'
@@ -35,10 +36,12 @@ export default function Home() {
                   className="flex items-center space-x-2 text-gray-600 hover:text-red-600 transition-colors duration-200"
                 >
                   {user.photoURL ? (
-                    <img 
+                    <Image 
                       src={user.photoURL} 
                       alt={user.displayName || user.email || 'User'}
                       className="w-8 h-8 rounded-full"
+                      width={32}
+                      height={32}
                     />
                   ) : (
                     <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-orange-600 rounded-full flex items-center justify-center">
