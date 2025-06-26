@@ -179,7 +179,7 @@ export async function POST(request: Request) {
     if (!newsUrl || !title) {
       return NextResponse.json({ error: '뉴스 URL과 제목을 모두 입력해주세요.' }, { status: 400 });
     }
-    
+
     // 1. 기사 본문 추출
     const articleContent = await extractArticleContent(newsUrl)
     if (!articleContent) {

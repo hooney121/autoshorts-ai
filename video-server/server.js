@@ -69,20 +69,32 @@ async function extractArticleContent(url) {
 }
 
 async function generateScript(articleContent, title) {
-    // Using the detailed 60-second script prompt from the backup file.
+    // 소제목과 본문을 분리하여 생성하는 개선된 프롬프트
     const response = await openai.chat.completions.create({
         model: "gpt-4-turbo",
         messages: [
             {
                 role: "system",
-                content: `아래 뉴스 기사를 유튜브 쇼츠용 60초 스크립트로 한국어로 요약해줘. 캐주얼하고 명확한 말투로 작성해줘. 총 8~10문장, 각 문장은 5초 이내로 말할 수 있게 짧고 임팩트 있게 작성해. 문장마다 줄바꿈(엔터)으로 구분해줘. 번호나 순서를 표시하지 말고, 순수 텍스트만 작성해줘. 실제 뉴스 대본처럼 자연스럽게 이어지게 해줘.`
+                content: `아래 뉴스 기사를 유튜브 쇼츠용 60초 스크립트로 한국어로 요약해줘. 
+                
+다음 형식으로 작성해줘:
+1. 첫 번째 줄: 메인 제목에 어울리는 임팩트 있는 소제목 (10자 이내)
+2. 두 번째 줄부터: 캐주얼하고 명확한 말투의 본문 스크립트 (8~10문장, 각 문장은 5초 이내)
+
+예시:
+속보!
+오늘 새벽 2시경 서울 강남구에서 큰 화재가 발생했습니다.
+현재 소방서에서 진화 작업을 진행 중입니다.
+...
+
+번호나 특수 문자는 사용하지 말고, 자연스럽게 이어지게 작성해줘.`
             },
             {
                 role: "user",
-                content: articleContent,
+                content: `제목: ${title}\n\n기사 내용: ${articleContent}`,
             },
         ],
-        max_tokens: 1000, // Increased max_tokens for a longer script
+        max_tokens: 1000,
     });
     return response.choices[0].message.content.trim();
 }
@@ -192,14 +204,22 @@ app.post('/generate-video', upload.any(), async (req, res) => {
     console.log("req.files (file fields):", req.files);
     console.log("-----------------");
 
-    const { newsUrl, title } = req.body;
+    const { newsUrl, title, subtitle } = req.body;
+    
+    // 소제목 디버깅 로그 추가
+    console.log("=== SUBTITLE DEBUG ===");
+    console.log("Raw subtitle from req.body:", subtitle);
+    console.log("Subtitle type:", typeof subtitle);
+    console.log("Subtitle length:", subtitle ? subtitle.length : 'undefined');
+    console.log("Subtitle trimmed:", subtitle ? subtitle.trim() : 'undefined');
+    console.log("=====================");
     
     if (!newsUrl || !title) {
         console.log("Validation failed: News URL or title is missing.");
         return res.status(400).json({ error: 'News URL and title are required.' });
     }
 
-    console.log(`[DATA] Received URL: ${newsUrl}, Title: ${title}`);
+    console.log(`[DATA] Received URL: ${newsUrl}, Title: ${title}, Subtitle: ${subtitle || 'AI가 생성 예정'}`);
 
     let tempDir; // Declare here to be accessible in the final catch block
 
@@ -265,22 +285,49 @@ app.post('/generate-video', upload.any(), async (req, res) => {
         }
 
         await new Promise((resolve, reject) => {
-            // 1. Create a separate subtitle file for the main title
+            // 1. 소제목 처리: 프론트엔드에서 받은 소제목이 있으면 사용, 없으면 AI가 생성한 것 사용
+            let finalSubtitle;
+            if (subtitle && subtitle.trim()) {
+                finalSubtitle = subtitle.trim();
+                console.log(`[SUBTITLE] Using user-provided subtitle: ${finalSubtitle}`);
+            } else {
+                // AI가 생성한 스크립트에서 소제목 추출
+                const scriptLines = script.split('\n').filter(line => line.trim());
+                finalSubtitle = scriptLines[0] || "Breaking News";
+                console.log(`[SUBTITLE] Using AI-generated subtitle: ${finalSubtitle}`);
+            }
+            
+            // 본문 스크립트는 AI가 생성한 것을 사용 (소제목 제외)
+            const scriptLines = script.split('\n').filter(line => line.trim());
+            const mainScript = scriptLines.slice(1).join('\n'); // 첫 번째 줄(AI 소제목) 제외하고 나머지가 본문
+            
+            // 2. 자막 파일들 생성
+            // 메인 제목용 자막 (상단 위치, 더 큰 폰트)
             const titleSubtitleContent = `1\n00:00:00,000 --> 00:59:59,999\n${title}`;
             const titleSubsPath = path.join(tempDir, 'title_subs.srt');
             fs.writeFileSync(titleSubsPath, titleSubtitleContent, { encoding: 'utf8' });
+            
+            // 소제목용 자막 (제목 아래, 중간 크기 폰트)
+            const subtitleSubtitleContent = `1\n00:00:00,000 --> 00:59:59,999\n${finalSubtitle}`;
+            const subtitleSubsPath = path.join(tempDir, 'subtitle_subs.srt');
+            fs.writeFileSync(subtitleSubsPath, subtitleSubtitleContent, { encoding: 'utf8' });
+            
+            // 본문 스크립트용 자막 (하단 위치) - 이미 생성된 srtContent 사용
+            const mainSrtPath = path.join(tempDir, 'main_subs.srt');
+            fs.writeFileSync(mainSrtPath, srtContent, { encoding: 'utf8' });
 
-            // 2. Check if we have images
+            // 3. Check if we have images
             if (imagePaths.length === 0) {
                 throw new Error('No images available for video generation');
             }
 
-            // 3. Escape paths for Windows
+            // 4. Escape paths for Windows
             const escapePath = (p) => p.replace(/\\/g, '/').replace(/:/g, '\\:');
-            const relativeSubsPath = escapePath(path.relative(process.cwd(), srtFilePath));
             const relativeTitleSubsPath = escapePath(path.relative(process.cwd(), titleSubsPath));
+            const relativeSubtitleSubsPath = escapePath(path.relative(process.cwd(), subtitleSubsPath));
+            const relativeMainSubsPath = escapePath(path.relative(process.cwd(), mainSrtPath));
 
-            // 4. Create complex filter for slideshow with backgrounds and subtitles
+            // 5. Create complex filter for slideshow with backgrounds and subtitles
             const imageInputs = imagePaths.map((_, index) => ({
                 path: imagePaths[index],
                 duration: 10 // 각 이미지 10초
@@ -296,12 +343,16 @@ app.post('/generate-video', upload.any(), async (req, res) => {
                 ...imageInputs.map((_, i) => `[redimg${i}][botbg${i}]overlay=0:1280:shortest=1,scale=1080:1920,setsar=1[finalbg${i}]`),
                 // 슬라이드 연결
                 imageInputs.map((_, i) => `[finalbg${i}]`).join('') + `concat=n=${imageInputs.length}:v=1:a=0[bgv]`,
-                // 자막 추가
-                `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=15,PrimaryColour=&H0000FF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=200' [withtitle]`,
-                `[withtitle]subtitles='${relativeSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=10,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=40' [v]`
+                // 자막 추가 (3단계: 메인 제목 → 소제목 → 본문)
+                // 1) 메인 제목 (Arial Black - 매우 굵은 폰트) - 위치 10만큼 아래로
+                `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=Arial Black,FontSize=24,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000FF&,Outline=3,Shadow=3,Alignment=2,MarginV=220' [withtitle]`,
+                // 2) 소제목 (Malgun Gothic Bold)
+                `[withtitle]subtitles='${relativeSubtitleSubsPath}':charenc=UTF-8:force_style='FontName=Malgun Gothic,FontSize=18,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=2,MarginV=200' [withsubtitle]`,
+                // 3) 본문 자막 (Malgun Gothic, FontSize=12) - MarginV=60
+                `[withsubtitle]subtitles='${relativeMainSubsPath}':charenc=UTF-8:force_style='FontName=Malgun Gothic,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=2,MarginV=60' [v]`
             ].join(';');
 
-            // 5. Create ffmpeg command with multiple image inputs
+            // 6. Create ffmpeg command with multiple image inputs
             const ffmpegArgs = [];
             
             // Add each image as input with loop and duration
@@ -331,6 +382,8 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             console.log('Using images:', imagePaths);
             console.log('Using audio:', audioFilePath);
             console.log('Filter:', filter);
+            console.log('Title:', title);
+            console.log('Final Subtitle:', finalSubtitle);
 
             // Execute the command
             const ffmpegProcess = spawn('C:/Users/User/Desktop/news/ffmpeg.exe', ffmpegArgs);

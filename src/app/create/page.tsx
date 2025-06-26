@@ -11,6 +11,7 @@ export default function Create() {
   const { user } = useAuth()
   const [newsUrl, setNewsUrl] = useState('')
   const [title, setTitle] = useState('')
+  const [subtitle, setSubtitle] = useState('')
   const [images, setImages] = useState<File[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +65,15 @@ export default function Create() {
       const formData = new FormData()
       formData.append('newsUrl', newsUrl)
       formData.append('title', title)
+      formData.append('subtitle', subtitle)
+      
+      // 소제목 디버깅 로그 추가
+      console.log("=== FRONTEND SUBTITLE DEBUG ===");
+      console.log("Subtitle value:", subtitle);
+      console.log("Subtitle type:", typeof subtitle);
+      console.log("Subtitle length:", subtitle.length);
+      console.log("FormData subtitle:", formData.get('subtitle'));
+      console.log("===============================");
       
       // 이미지 파일들 추가
       images.forEach((image) => {
@@ -154,6 +164,25 @@ export default function Create() {
               required
               disabled={isLoading}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              소제목 
+              <span className="text-gray-500 text-xs ml-1">(선택사항, 10자 이내 권장)</span>
+            </label>
+            <input
+              type="text"
+              value={subtitle}
+              onChange={(e) => setSubtitle(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+              placeholder="속보! 또는 긴급!"
+              maxLength={15}
+              disabled={isLoading}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              소제목을 입력하지 않으면 AI가 자동으로 생성합니다
+            </p>
           </div>
 
           <div>
