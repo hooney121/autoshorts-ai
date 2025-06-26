@@ -599,7 +599,7 @@ export default function Home() {
                     </div>
                   </div>
                   <blockquote className="text-slate-700 italic leading-relaxed">
-                    "{testimonial.quote}"
+                    {testimonial.quote}
                   </blockquote>
                 </motion.div>
               ))}
