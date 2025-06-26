@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
-import { ArrowLeft, Upload, X } from 'lucide-react'
+import { ArrowLeft, Upload, X, Volume2, Loader2, Square } from 'lucide-react'
 import Image from 'next/image'
 import { useDropzone } from 'react-dropzone'
 
@@ -18,8 +18,21 @@ export default function Create() {
   const [error, setError] = useState<string | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState<string>('')
+  const [voice, setVoice] = useState('21m00Tcm4TlvDq8ikWAM')
 
   const MAX_IMAGES = 6
+
+  const voiceOptions = [
+    { id: '21m00Tcm4TlvDq8ikWAM', label: '민주 (여성, 온화한 목소리)', sample: '/voices/minju.mp3' },
+    { id: 'pNInz6obpgDQGcFmaJgB', label: '현우 (남성, 또렷한 표준 발음)', sample: '/voices/hyunwoo.mp3' },
+    { id: 'AZnzlk1XvdvUeBnXmlld', label: '수진 (여성, 밝고 경쾌함)', sample: '/voices/sujin.mp3' },
+    { id: 'TX3LPaxmHKxFdv7VOQHJ', label: '지훈 (남성, 차분하고 신뢰감)', sample: '/voices/jihun.mp3' },
+    { id: 'MF3mGyEYCl7XYWbV9V6O', label: '예린 (여성, 또렷하고 힘있음)', sample: '/voices/yerin.mp3' },
+    { id: 'VR6AewLTigWG4xSOukaG', label: '준호 (남성, 부드럽고 저음)', sample: '/voices/junho.mp3' },
+    { id: 'EXAVITQu4vr4xnSDxMaL', label: '소연 (여성, 친근하고 자연스러움)', sample: '/voices/soyeon.mp3' },
+  ];
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
+  const previewAudio = useRef<HTMLAudioElement | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length + images.length > MAX_IMAGES) {
@@ -68,6 +81,7 @@ export default function Create() {
       formData.append('title', title)
       formData.append('subtitle', subtitle)
       formData.append('channelName', channelName)
+      formData.append('voice', voice)
       
       // 소제목 디버깅 로그 추가
       console.log("=== FRONTEND SUBTITLE DEBUG ===");
@@ -123,6 +137,37 @@ export default function Create() {
       setProgress('')
     }
   }
+
+  const handlePreview = async (voiceId: string) => {
+    const opt = voiceOptions.find(v => v.id === voiceId);
+    if (!opt?.sample) return;
+    setPreviewLoading(voiceId);
+    try {
+      if (previewAudio.current) {
+        previewAudio.current.pause();
+        previewAudio.current.currentTime = 0;
+        previewAudio.current = null;
+      }
+      previewAudio.current = new Audio(opt.sample);
+      previewAudio.current.play();
+      previewAudio.current.onended = () => {
+        previewAudio.current = null;
+        setPreviewLoading(null);
+      };
+    } catch (e) {
+      alert('미리듣기 중 오류가 발생했습니다.');
+      setPreviewLoading(null);
+    }
+  };
+
+  const handleStopPreview = () => {
+    if (previewAudio.current) {
+      previewAudio.current.pause();
+      previewAudio.current.currentTime = 0;
+      previewAudio.current = null;
+      setPreviewLoading(null);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -206,6 +251,67 @@ export default function Create() {
             <p className="text-xs text-gray-500 mt-1">
               채널 이름을 입력하지 않으면 AI가 자동으로 생성합니다
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">목소리 선택</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+              {voiceOptions.map(opt => {
+                const isPlaying = previewLoading === opt.id;
+                return (
+                  <div key={opt.id} className={`rounded-2xl border shadow-md p-4 flex items-center gap-4 transition-all duration-200
+                    ${voice === opt.id ? 'border-pink-500 ring-2 ring-pink-200 bg-gradient-to-r from-pink-50 to-white scale-[1.03]' : 'border-gray-200 bg-white'}`}
+                  >
+                    <div className="flex-1">
+                      <div className="font-bold text-base mb-1 text-gray-800 flex items-center gap-2">
+                        <span className={voice === opt.id ? 'text-pink-600' : 'text-gray-700'}>{opt.label.split(' ')[0]}</span>
+                        <span className="text-xs text-gray-400 font-normal">{opt.label.replace(/^[^ ]+ /, '')}</span>
+                      </div>
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          type="button"
+                          className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-semibold shadow transition-all duration-200
+                            ${isPlaying ? 'bg-pink-500 text-white animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-pink-100 hover:text-pink-600'}
+                            ${voice === opt.id ? 'border border-pink-400' : 'border border-gray-300'}
+                            disabled:opacity-50`}
+                          onClick={() => handlePreview(opt.id)}
+                          disabled={isLoading || isPlaying}
+                          style={{ minWidth: 90 }}
+                        >
+                          {isPlaying ? (
+                            <Loader2 className="animate-spin w-4 h-4 mr-1" />
+                          ) : (
+                            <Volume2 className="w-4 h-4 mr-1" />
+                          )}
+                          <span>미리듣기</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full border font-semibold shadow transition-all duration-200
+                            ${isPlaying ? 'bg-gray-200 text-red-500 border-red-300' : 'bg-gray-100 text-gray-400 border-gray-200'}
+                            hover:bg-red-100 hover:text-red-600`}
+                          onClick={handleStopPreview}
+                          disabled={!isPlaying}
+                          aria-label="미리듣기 중지"
+                        >
+                          <span>중지</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`ml-2 px-2 py-1 rounded-lg text-xs font-semibold border transition-all duration-200
+                            ${voice === opt.id ? 'bg-pink-500 text-white border-pink-500' : 'bg-white text-pink-500 border-pink-200 hover:bg-pink-50'}`}
+                          onClick={() => setVoice(opt.id)}
+                          disabled={isLoading}
+                        >
+                          선택
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">한국어에 최적화된 다양한 목소리를 선택할 수 있습니다.</p>
           </div>
 
           <div>

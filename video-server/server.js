@@ -99,11 +99,8 @@ async function generateScript(articleContent, title) {
     return response.choices[0].message.content.trim();
 }
 
-async function generateSpeech(script) {
-    // The previous voice ID ('z9fAnlkpzviPz146aXkP') was not found.
-    // Using a standard, widely available voice ID "Rachel" instead.
-    const ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; 
-
+async function generateSpeech(script, voiceId) {
+    const ELEVENLABS_VOICE_ID = voiceId || "21m00Tcm4TlvDq8ikWAM";
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
         method: 'POST',
         headers: {
@@ -204,7 +201,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
     console.log("req.files (file fields):", req.files);
     console.log("-----------------");
 
-    const { newsUrl, title, subtitle, channelName } = req.body;
+    const { newsUrl, title, subtitle, channelName, voice } = req.body;
     
     // 소제목 디버깅 로그 추가
     console.log("=== SUBTITLE DEBUG ===");
@@ -238,7 +235,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
         console.log(`[STEP 2/7] Script generated: ${script.substring(0, 50)}...`);
 
         console.log("[STEP 3/7] Generating speech...");
-        const audioBuffer = await generateSpeech(script);
+        const audioBuffer = await generateSpeech(script, voice);
         const audioFilePath = path.join(tempDir, 'audio.mp3');
         fs.writeFileSync(audioFilePath, audioBuffer);
         console.log("[STEP 3/7] Speech generated and saved.");
