@@ -11,6 +11,7 @@ const os = require('os');
 const OpenAI = require('openai');
 const fetch = require('node-fetch');
 const { JSDOM } = require('jsdom');
+const { spawn } = require('child_process');
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -257,78 +258,110 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             console.log(`[STEP 5/7] Downloaded ${unsplashUrls.length} images from Unsplash.`);
         }
         
-        console.log("[STEP 6/7] Starting FFMPEG video generation (using backup file logic)...");
+        console.log("[STEP 6/7] Starting FFMPEG video generation (using direct command)...");
         const finalOutputPath = path.join('C:/Users/User/Desktop/outputs', `${title.replace(/[^a-z0-9]/gi, '_')}.mp4`);
         if (!fs.existsSync('C:/Users/User/Desktop/outputs')) {
             fs.mkdirSync('C:/Users/User/Desktop/outputs');
         }
 
         await new Promise((resolve, reject) => {
-            // --- Start of logic from backup file ---
-
             // 1. Create a separate subtitle file for the main title
             const titleSubtitleContent = `1\n00:00:00,000 --> 00:59:59,999\n${title}`;
             const titleSubsPath = path.join(tempDir, 'title_subs.srt');
             fs.writeFileSync(titleSubsPath, titleSubtitleContent, { encoding: 'utf8' });
 
-            // 2. Escape paths for the FFMPEG filter
-            const escapePath = (p) => p.replace(/\\/g, '/').replace(/:/g, '\\:');
-            const escapedSubsPath = escapePath(srtFilePath);
-            const escapedTitleSubsPath = escapePath(titleSubsPath);
+            // 2. Check if we have images
+            if (imagePaths.length === 0) {
+                throw new Error('No images available for video generation');
+            }
 
-            // 3. Construct the complex filter from the backup file
-            const imageDuration = 10; // Each image is set to a long duration
-            const nImages = imagePaths.length;
+            // 3. Escape paths for Windows
+            const escapePath = (p) => p.replace(/\\/g, '/').replace(/:/g, '\\:');
+            const relativeSubsPath = escapePath(path.relative(process.cwd(), srtFilePath));
+            const relativeTitleSubsPath = escapePath(path.relative(process.cwd(), titleSubsPath));
+
+            // 4. Create complex filter for slideshow with backgrounds and subtitles
+            const imageInputs = imagePaths.map((_, index) => ({
+                path: imagePaths[index],
+                duration: 10 // 각 이미지 10초
+            }));
+
             const filter = [
-                ...imagePaths.map((_, i) => `color=black:s=1080x1920[topbg${i}]`),
-                ...imagePaths.map((_, i) => `color=black:s=1080x640[botbg${i}]`),
-                ...imagePaths.map((_, i) => `[${i}:v]scale=1080:640[midimg${i}]`),
-                ...imagePaths.map((_, i) => `[topbg${i}][midimg${i}]overlay=0:640:shortest=1[redimg${i}]`),
-                ...imagePaths.map((_, i) => `[redimg${i}][botbg${i}]overlay=0:1280:shortest=1,scale=1080:1920,setsar=1[finalbg${i}]`),
-                imagePaths.map((_, i) => `[finalbg${i}]`).join('') + `concat=n=${nImages}:v=1:a=0[bgv]`,
-                `[bgv]subtitles='${escapedTitleSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=15,PrimaryColour=&H0000FF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=200' [withtitle]`,
-                `[withtitle]subtitles='${escapedSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=10,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=40' [v]`
+                // 각 슬라이드별 배경 생성
+                ...imageInputs.map((_, i) => `color=black:s=1080x1920[topbg${i}]`),
+                ...imageInputs.map((_, i) => `color=black:s=1080x640[botbg${i}]`),
+                // 각 이미지 처리 및 합성
+                ...imageInputs.map((_, i) => `[${i}:v]scale=1080:640[midimg${i}]`),
+                ...imageInputs.map((_, i) => `[topbg${i}][midimg${i}]overlay=0:640:shortest=1[redimg${i}]`),
+                ...imageInputs.map((_, i) => `[redimg${i}][botbg${i}]overlay=0:1280:shortest=1,scale=1080:1920,setsar=1[finalbg${i}]`),
+                // 슬라이드 연결
+                imageInputs.map((_, i) => `[finalbg${i}]`).join('') + `concat=n=${imageInputs.length}:v=1:a=0[bgv]`,
+                // 자막 추가
+                `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=15,PrimaryColour=&H0000FF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=200' [withtitle]`,
+                `[withtitle]subtitles='${relativeSubsPath}':charenc=UTF-8:force_style='FontName=Noto Sans,FontSize=10,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=2,Shadow=1,Alignment=2,MarginV=40' [v]`
             ].join(';');
+
+            // 5. Create ffmpeg command with multiple image inputs
+            const ffmpegArgs = [];
             
-            // 4. Create the ffmpeg command instance
-            const ffmpegCommand = ffmpeg();
-            
-            // Add each image as a looped input with a fixed duration
-            imagePaths.forEach((imgPath) => {
-                ffmpegCommand.input(imgPath).inputOptions(['-loop 1', `-t ${imageDuration}`]);
+            // Add each image as input with loop and duration
+            imageInputs.forEach((input) => {
+                ffmpegArgs.push('-loop', '1', '-t', input.duration.toString(), '-i', input.path);
             });
 
-            // Add the audio as the last input
-            ffmpegCommand.input(audioFilePath);
+            // Add audio as last input
+            ffmpegArgs.push('-i', audioFilePath);
 
-            // 5. Execute the command with options from the backup file
-            ffmpegCommand
-                .complexFilter(filter)
-                .outputOptions([
-                    '-map [v]',
-                    `-map ${nImages}:a`, // Dynamically map the audio stream
-                    '-c:v', 'libx264',
-                    '-tune', 'stillimage',
-                    '-c:a', 'aac',
-                    '-b:a', '192k',
-                    '-pix_fmt', 'yuv420p',
-                    '-shortest' // Use audio length to determine final video length
-                ])
-                .on('start', (commandLine) => {
-                    console.log('ffmpeg command:', commandLine);
-                })
-                .on('stderr', (line) => { console.log('ffmpeg stderr:', line); }) // Add detailed logs
-                .on('end', () => {
-                    console.log('[STEP 6/7] Video generation finished (backup logic).');
-                    resolve();
-                })
-                .on('error', (err) => {
-                    console.error('ffmpeg error (backup logic):', err.message);
-                    reject(err);
-                })
-                .save(finalOutputPath);
+            // Add output options
+            ffmpegArgs.push(
+                '-y',
+                '-filter_complex', filter,
+                '-map', '[v]',
+                '-map', `${imageInputs.length}:a`, // Audio from last input
+                '-c:v', 'libx264',
+                '-tune', 'stillimage',
+                '-c:a', 'aac',
+                '-b:a', '192k',
+                '-pix_fmt', 'yuv420p',
+                '-shortest',
+                finalOutputPath
+            );
+
+            console.log('Complex slideshow ffmpeg command:', 'ffmpeg', ffmpegArgs.join(' '));
+            console.log('Using images:', imagePaths);
+            console.log('Using audio:', audioFilePath);
+            console.log('Filter:', filter);
+
+            // Execute the command
+            const ffmpegProcess = spawn('C:/Users/User/Desktop/news/ffmpeg.exe', ffmpegArgs);
+
+            let stderrOutput = '';
             
-            // --- End of logic from backup file ---
+            ffmpegProcess.stdout.on('data', (data) => {
+                console.log('ffmpeg stdout:', data.toString());
+            });
+
+            ffmpegProcess.stderr.on('data', (data) => {
+                const output = data.toString();
+                stderrOutput += output;
+                console.log('ffmpeg stderr:', output);
+            });
+
+            ffmpegProcess.on('close', (code) => {
+                if (code === 0) {
+                    console.log('[STEP 6/7] Video generation finished successfully.');
+                    resolve();
+                } else {
+                    console.error(`ffmpeg process exited with code ${code}`);
+                    console.error('Full stderr output:', stderrOutput);
+                    reject(new Error(`FFmpeg process exited with code ${code}`));
+                }
+            });
+
+            ffmpegProcess.on('error', (err) => {
+                console.error('ffmpeg spawn error:', err.message);
+                reject(err);
+            });
         });
 
         console.log("[STEP 7/7] Sending video to client...");
@@ -370,5 +403,9 @@ app.post('/generate-video', upload.any(), async (req, res) => {
 });
 
 app.listen(4000, '0.0.0.0', () => {
-  console.log('Video server running on port 4000');
+  console.log('=== VIDEO SERVER STARTED ===');
+  console.log('Server running on port 4000');
+  console.log('Server accessible at: http://localhost:4000');
+  console.log('Ngrok URL: https://onminds.ngrok.app');
+  console.log('===========================');
 });

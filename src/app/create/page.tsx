@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useCallback } from 'react'
-import { useDropzone } from 'react-dropzone'
+import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 import { ArrowLeft, Upload, X } from 'lucide-react'
 import Image from 'next/image'
+import { useDropzone } from 'react-dropzone'
 
 export default function Create() {
+  const { user } = useAuth()
   const [newsUrl, setNewsUrl] = useState('')
   const [title, setTitle] = useState('')
   const [images, setImages] = useState<File[]>([])
@@ -19,11 +21,11 @@ export default function Create() {
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length + images.length > MAX_IMAGES) {
-      setError('최대 6개의 이미지만 업로드할 수 있습니다.')
+      setError(`최대 ${MAX_IMAGES}개의 이미지만 업로드할 수 있습니다.`)
       return
     }
 
-    const newImages = [...images, ...acceptedFiles]
+    const newImages = [...images, ...acceptedFiles.slice(0, MAX_IMAGES - images.length)]
     setImages(newImages)
   }, [images])
 
@@ -37,54 +39,58 @@ export default function Create() {
   })
 
   const removeImage = (index: number) => {
-    setImages(prevImages => {
-      const newImages = [...prevImages];
-      newImages.splice(index, 1);
-      return newImages;
-    });
+    setImages(prevImages => prevImages.filter((_, i) => i !== index));
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!user) {
+      setError('로그인이 필요합니다.');
+      return;
+    }
     if (!newsUrl || !title) {
-      setError('Please provide both a news URL and a title.')
+      setError('뉴스 URL과 제목을 모두 입력해주세요.')
       return
     }
 
     setIsLoading(true)
     setError(null)
     setVideoUrl(null)
-    setProgress('Initializing video generation...')
-
-    // Using the new permanent ngrok domain
-    const videoServerUrl = 'https://onminds.ngrok.app/generate-video'
-
-    const formData = new FormData()
-    formData.append('newsUrl', newsUrl)
-    formData.append('title', title)
-    images.forEach((image) => {
-      formData.append('images', image)
-    })
+    setProgress('사용자 인증 및 사용량 확인 중...')
 
     try {
-      setProgress('Uploading data and starting process...')
-      const response = await fetch(videoServerUrl, {
+      const token = await user.getIdToken();
+
+      const formData = new FormData()
+      formData.append('newsUrl', newsUrl)
+      formData.append('title', title)
+      
+      // 이미지 파일들 추가
+      images.forEach((image, index) => {
+        formData.append('images', image)
+      })
+
+      setProgress('데이터 업로드 및 처리 시작 중...')
+      
+      const response = await fetch('https://onminds.ngrok.app/generate-video', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       })
 
       if (!response.ok) {
         const errData = await response.json()
-        throw new Error(errData.error || 'Failed to generate video.')
+        throw new Error(errData.error || '영상 제작에 실패했습니다.')
       }
 
-      setProgress('Video generated! Downloading...')
+      setProgress('영상 생성 완료! 다운로드 중...')
       
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       setVideoUrl(url)
 
-      // Trigger download
       const a = document.createElement('a')
       a.href = url
       a.download = `${title.replace(/[^a-z0-9]/gi, '_')}.mp4`
@@ -96,7 +102,7 @@ export default function Create() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('An unknown error occurred during video generation.');
+        setError('알 수 없는 오류가 발생했습니다.');
       }
     } finally {
       setIsLoading(false)
@@ -105,148 +111,145 @@ export default function Create() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAFA]">
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <Link 
-              href="/"
-              className="inline-flex items-center text-gray-600 hover:text-red-600 transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              메인으로 돌아가기
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">쇼츠 만들기</h1>
-          </div>
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-2xl">
+        <div className="text-center mb-8">
+          <Link 
+            href="/"
+            className="inline-flex items-center text-gray-600 hover:text-red-600 transition-colors duration-200 mb-6 group"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2 group-hover:-translate-x-1 transition-transform" />
+            메인으로 돌아가기
+          </Link>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-red-600 text-transparent bg-clip-text mb-2">
+            뉴스 쇼츠 만들기
+          </h1>
+          <p className="text-gray-600">
+            URL을 붙여넣고 AI로 쇼츠를 만들어보세요
+          </p>
+        </div>
           
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <label className="block text-sm font-medium text-gray-700 mb-2">뉴스 URL</label>
-              <input
-                type="url"
-                value={newsUrl}
-                onChange={(e) => setNewsUrl(e.target.value)}
-                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="https://news.example.com/article"
-                required
-              />
+        <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-2xl shadow-lg">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">뉴스 URL</label>
+            <input
+              type="url"
+              value={newsUrl}
+              onChange={(e) => setNewsUrl(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+              placeholder="https://news.example.com/article"
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">영상 제목</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+              placeholder="쇼츠 영상의 제목을 입력하세요"
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              이미지 업로드 (선택사항, 최대 {MAX_IMAGES}개)
+            </label>
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer ${
+                isDragActive
+                  ? 'border-red-500 bg-red-50'
+                  : images.length >= MAX_IMAGES
+                  ? 'border-gray-200 bg-gray-50 cursor-not-allowed'
+                  : 'border-gray-300 hover:border-red-400 hover:bg-red-50'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              {images.length >= MAX_IMAGES ? (
+                <p className="text-gray-500">최대 {MAX_IMAGES}개 이미지 업로드 완료</p>
+              ) : isDragActive ? (
+                <p className="text-red-600">이미지를 여기에 드롭하세요</p>
+              ) : (
+                <div>
+                  <p className="text-gray-600 mb-2">
+                    이미지를 드래그하거나 클릭하여 업로드
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    PNG, JPG, GIF 파일 지원 (최대 {MAX_IMAGES}개)
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <label className="block text-sm font-medium text-gray-700 mb-2">제목</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="영상 제목을 입력하세요"
-                required
-              />
-            </div>
-
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                이미지 업로드 (최대 6개)
-              </label>
-              <div className="grid grid-cols-3 gap-4 mb-4">
+            {images.length > 0 && (
+              <div className="mt-4 grid grid-cols-3 gap-4">
                 {images.map((image, index) => (
                   <div key={index} className="relative group">
-                    <Image 
-                      src={URL.createObjectURL(image)} 
-                      alt={`Preview ${index + 1}`} 
-                      width={1080} 
-                      height={1920}
-                      style={{ objectFit: 'cover' }}
-                      className="w-full h-32 rounded-lg"
+                    <Image
+                      src={URL.createObjectURL(image)}
+                      alt={`업로드된 이미지 ${index + 1}`}
+                      width={100}
+                      height={100}
+                      className="w-full h-24 object-cover rounded-lg border border-gray-200"
                     />
                     <button
                       type="button"
                       onClick={() => removeImage(index)}
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                 ))}
               </div>
-              
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-                  ${isDragActive ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-red-500 hover:bg-red-50'}
-                  ${images.length >= MAX_IMAGES ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <input {...getInputProps()} />
-                <div className="space-y-2">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="text-sm text-gray-500">
-                    {isDragActive ? (
-                      <p>이미지를 여기에 놓으세요</p>
-                    ) : (
-                      <p>
-                        이미지를 드래그하거나 클릭하여 업로드하세요
-                        <br />
-                        <span className="text-xs">(JPG, PNG, GIF 파일 지원)</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                {images.length}/{MAX_IMAGES} 이미지 업로드됨
-              </p>
-            </div>
-
+            )}
+          </div>
+          
+          <div className="pt-4">
             <button
               type="submit"
-              disabled={isLoading || !newsUrl || !title}
-              className="w-full bg-red-600 text-white p-4 rounded-lg font-medium hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-sm hover:shadow-md"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-red-600 to-orange-600 text-white py-4 px-4 rounded-xl font-semibold hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 transition-all duration-200 flex items-center justify-center"
             >
               {isLoading ? (
-                <div className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  {progress}
-                </div>
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                  <span>{progress || '제작 중...'}</span>
+                </>
               ) : (
-                '영상 생성하기'
+                '쇼츠 영상 만들기'
               )}
             </button>
-          </form>
+          </div>
 
           {error && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 text-red-600 rounded-lg">
-              {error}
+            <div className="mt-4 text-center p-3 bg-red-50 text-red-600 border border-red-200 rounded-xl">
+              <p>{error}</p>
             </div>
           )}
 
           {videoUrl && (
-            <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-green-600">영상이 생성되었습니다!</h2>
-                  <p className="text-gray-600 mt-1">아래 버튼을 클릭하여 영상을 다운로드하세요.</p>
-                </div>
-                <button
-                  onClick={() => {
-                    const a = document.createElement('a')
-                    a.href = videoUrl
-                    a.download = `${title.replace(/[^a-z0-9]/gi, '_')}.mp4`
-                    document.body.appendChild(a)
-                    a.click()
-                    document.body.removeChild(a)
-                  }}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors font-medium"
-                >
-                  영상 다운로드
-                </button>
-              </div>
+            <div className="mt-6 text-center p-4 bg-green-50 border border-green-200 rounded-xl">
+              <h3 className="text-lg font-semibold text-green-800 mb-2">영상 제작 완료!</h3>
+              <p className="text-green-700 mb-4">영상이 자동으로 다운로드됩니다.</p>
+              <a
+                href={videoUrl}
+                download={`${title.replace(/[^a-z0-9]/gi, '_')}.mp4`}
+                className="inline-block bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700"
+              >
+                다시 다운로드
+              </a>
             </div>
           )}
-        </div>
+        </form>
       </div>
     </main>
   )
-} 
+}

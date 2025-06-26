@@ -171,17 +171,17 @@ async function fetchUnsplashImages(keyword: string, accessKey: string, count: nu
 
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData()
-    const url = formData.get('url') as string
-    const title = formData.get('title') as string
-    const userImages = formData.getAll('images') as File[]
+    const formData = await request.formData();
+    const newsUrl = formData.get('newsUrl') as string;
+    const title = formData.get('title') as string;
+    const userImages = formData.getAll('images') as File[];
 
-    if (!title) {
-      throw new Error('제목을 입력해주세요.')
+    if (!newsUrl || !title) {
+      return NextResponse.json({ error: '뉴스 URL과 제목을 모두 입력해주세요.' }, { status: 400 });
     }
-
-    // 1. 기사 본문 추출 (3000자 제한)
-    const articleContent = await extractArticleContent(url)
+    
+    // 1. 기사 본문 추출
+    const articleContent = await extractArticleContent(newsUrl)
     if (!articleContent) {
       throw new Error('기사 본문을 추출할 수 없습니다.')
     }
@@ -202,68 +202,73 @@ export async function POST(request: Request) {
     })
     const script = scriptResponse.choices[0].message?.content
     if (!script) {
-      throw new Error('스크립트 생성에 실패했습니다.')
+      throw new Error('스크립트를 생성할 수 없습니다.')
     }
 
-    // 3. ElevenLabs로 본문 음성 생성
+    // 3. ElevenLabs로 음성 생성
     const { audioBuffer } = await generateSpeech(script)
-    // 4. Whisper API로 본문 자막 생성
-    const subsText = await generateSubtitles(audioBuffer)
 
-    // 사용자 이미지 처리
-    const userImageBuffers: Buffer[] = []
+    // 4. Whisper로 자막 생성
+    const subtitles = await generateSubtitles(audioBuffer)
+
+    // 5. 이미지 처리 (사용자 이미지 우선 사용, 부족하면 자동 생성)
+    const userImageBuffers: Buffer[] = [];
     for (const image of userImages) {
-      const buffer = Buffer.from(await image.arrayBuffer())
-      userImageBuffers.push(buffer)
+        const buffer = Buffer.from(await image.arrayBuffer());
+        userImageBuffers.push(buffer);
     }
-
-    // 부족한 이미지는 Unsplash에서 가져오기
-    const keyword = extractKeyword(script)
-    const remainingCount = Math.max(0, 6 - userImageBuffers.length)
-    const unsplashImages = remainingCount > 0 
-      ? await fetchUnsplashImages(keyword, process.env.UNSPLASH_ACCESS_KEY!, remainingCount)
-      : []
-
-    // 모든 이미지 버퍼 합치기
-    const allImageBuffers = [...userImageBuffers, ...unsplashImages]
-
-    // 5. FFmpeg로 영상 생성 (video-server로 요청)
-    const videoFormData = new FormData()
-    allImageBuffers.forEach((imgBuffer, idx) => {
-      videoFormData.append('images', imgBuffer, { filename: `image_${idx}.jpg`, contentType: 'image/jpeg' })
-    })
-    videoFormData.append('audio', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mp3' })
-    videoFormData.append('subtitles', Buffer.from(subsText), { filename: 'subtitles.srt', contentType: 'application/x-subrip' })
-    videoFormData.append('title', title)
+    
+    let finalImages: Buffer[] = userImageBuffers;
+    const requiredImageCount = 6;
+    if (userImageBuffers.length < requiredImageCount) {
+        const keyword = extractKeyword(script);
+        const remainingCount = requiredImageCount - userImageBuffers.length;
+        try {
+            const unsplashImages = await fetchUnsplashImages(keyword, process.env.UNSPLASH_ACCESS_KEY || '', remainingCount);
+            finalImages = [...userImageBuffers, ...unsplashImages];
+        } catch (imageError) {
+            console.warn('Unsplash 이미지 생성 실패, 사용자 이미지만 사용:', imageError);
+            if (finalImages.length === 0) {
+              throw new Error('사용자 이미지가 없고, 자동 이미지 생성에도 실패했습니다.');
+            }
+        }
+    }
 
     // 6. 비디오 생성 서버로 데이터 전송
-    const videoResponse = await fetch('https://768e-116-123-195-203.ngrok-free.app/generate-video', {
+    const videoFormData = new FormData()
+    videoFormData.append('newsUrl', newsUrl)
+    videoFormData.append('title', title)
+    videoFormData.append('audio', audioBuffer, 'audio.mp3')
+    videoFormData.append('subtitles', subtitles, 'subtitles.srt')
+    finalImages.forEach((img, i) => {
+      videoFormData.append(`image_${i}`, img, `image_${i}.jpg`)
+    })
+
+    const videoServerUrl = 'https://onminds.ngrok.app/generate-video'
+    const videoResponse = await fetch(videoServerUrl, {
       method: 'POST',
       body: videoFormData,
       headers: videoFormData.getHeaders(),
     })
+
     if (!videoResponse.ok) {
-      throw new Error('video-server에서 영상 생성 실패')
+      const errorBody = await videoResponse.text()
+      console.error('비디오 서버 에러:', errorBody)
+      throw new Error(`비디오 생성에 실패했습니다: ${videoResponse.statusText}`)
     }
-    const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
+    
+    const videoArrayBuffer = await videoResponse.arrayBuffer();
 
-    // 영상 파일을 blob으로 반환
-    const finalTitle = title || 'shorts';
-    // RFC 5987에 따라 파일 이름을 안전하게 인코딩
-    const encodedTitle = encodeURIComponent(finalTitle);
-
-    return new Response(videoBuffer, {
+    return new NextResponse(videoArrayBuffer, {
+      status: 200,
       headers: {
         'Content-Type': 'video/mp4',
-        // 호환성을 위해 fallback 파일명과 UTF-8 인코딩 파일명을 모두 제공
-        'Content-Disposition': `attachment; filename="video.mp4"; filename*=UTF-8''${encodedTitle}.mp4`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(title)}.mp4"`,
       },
     })
   } catch (error) {
-    console.error('Error:', error)
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : '처리 중 오류가 발생했습니다.' },
-      { status: 500 }
-    )
+    console.error('Error in POST /api/create:', error)
+    const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 } 
