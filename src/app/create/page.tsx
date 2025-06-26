@@ -12,6 +12,7 @@ export default function Create() {
   const [newsUrl, setNewsUrl] = useState('')
   const [title, setTitle] = useState('')
   const [subtitle, setSubtitle] = useState('')
+  const [channelName, setChannelName] = useState('')
   const [images, setImages] = useState<File[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +67,7 @@ export default function Create() {
       formData.append('newsUrl', newsUrl)
       formData.append('title', title)
       formData.append('subtitle', subtitle)
+      formData.append('channelName', channelName)
       
       // 소제목 디버깅 로그 추가
       console.log("=== FRONTEND SUBTITLE DEBUG ===");
@@ -73,6 +75,8 @@ export default function Create() {
       console.log("Subtitle type:", typeof subtitle);
       console.log("Subtitle length:", subtitle.length);
       console.log("FormData subtitle:", formData.get('subtitle'));
+      console.log("Channel name:", channelName);
+      console.log("FormData channelName:", formData.get('channelName'));
       console.log("===============================");
       
       // 이미지 파일들 추가
@@ -182,6 +186,25 @@ export default function Create() {
             />
             <p className="text-xs text-gray-500 mt-1">
               소제목을 입력하지 않으면 AI가 자동으로 생성합니다
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              채널 이름 
+              <span className="text-gray-500 text-xs ml-1">(선택사항, 10자 이내 권장)</span>
+            </label>
+            <input
+              type="text"
+              value={channelName}
+              onChange={(e) => setChannelName(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+              placeholder="채널 이름을 입력하세요"
+              maxLength={10}
+              disabled={isLoading}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              채널 이름을 입력하지 않으면 AI가 자동으로 생성합니다
             </p>
           </div>
 

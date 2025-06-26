@@ -204,7 +204,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
     console.log("req.files (file fields):", req.files);
     console.log("-----------------");
 
-    const { newsUrl, title, subtitle } = req.body;
+    const { newsUrl, title, subtitle, channelName } = req.body;
     
     // 소제목 디버깅 로그 추가
     console.log("=== SUBTITLE DEBUG ===");
@@ -212,6 +212,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
     console.log("Subtitle type:", typeof subtitle);
     console.log("Subtitle length:", subtitle ? subtitle.length : 'undefined');
     console.log("Subtitle trimmed:", subtitle ? subtitle.trim() : 'undefined');
+    console.log("Channel name:", channelName);
     console.log("=====================");
     
     if (!newsUrl || !title) {
@@ -219,7 +220,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
         return res.status(400).json({ error: 'News URL and title are required.' });
     }
 
-    console.log(`[DATA] Received URL: ${newsUrl}, Title: ${title}, Subtitle: ${subtitle || 'AI가 생성 예정'}`);
+    console.log(`[DATA] Received URL: ${newsUrl}, Title: ${title}, Subtitle: ${subtitle || 'AI가 생성 예정'}, Channel: ${channelName || '기본 채널'}`);
 
     let tempDir; // Declare here to be accessible in the final catch block
 
@@ -297,6 +298,10 @@ app.post('/generate-video', upload.any(), async (req, res) => {
                 console.log(`[SUBTITLE] Using AI-generated subtitle: ${finalSubtitle}`);
             }
             
+            // 채널 이름 처리
+            const finalChannelName = channelName && channelName.trim() ? channelName.trim() : "뉴스 채널";
+            console.log(`[CHANNEL] Using channel name: ${finalChannelName}`);
+            
             // 본문 스크립트는 AI가 생성한 것을 사용 (소제목 제외)
             const scriptLines = script.split('\n').filter(line => line.trim());
             const mainScript = scriptLines.slice(1).join('\n'); // 첫 번째 줄(AI 소제목) 제외하고 나머지가 본문
@@ -312,6 +317,11 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             const subtitleSubsPath = path.join(tempDir, 'subtitle_subs.srt');
             fs.writeFileSync(subtitleSubsPath, subtitleSubtitleContent, { encoding: 'utf8' });
             
+            // 채널 이름용 자막 (오른쪽 위)
+            const channelSubtitleContent = `1\n00:00:00,000 --> 00:59:59,999\n${finalChannelName}`;
+            const channelSubsPath = path.join(tempDir, 'channel_subs.srt');
+            fs.writeFileSync(channelSubsPath, channelSubtitleContent, { encoding: 'utf8' });
+            
             // 본문 스크립트용 자막 (하단 위치) - 이미 생성된 srtContent 사용
             const mainSrtPath = path.join(tempDir, 'main_subs.srt');
             fs.writeFileSync(mainSrtPath, srtContent, { encoding: 'utf8' });
@@ -325,6 +335,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             const escapePath = (p) => p.replace(/\\/g, '/').replace(/:/g, '\\:');
             const relativeTitleSubsPath = escapePath(path.relative(process.cwd(), titleSubsPath));
             const relativeSubtitleSubsPath = escapePath(path.relative(process.cwd(), subtitleSubsPath));
+            const relativeChannelSubsPath = escapePath(path.relative(process.cwd(), channelSubsPath));
             const relativeMainSubsPath = escapePath(path.relative(process.cwd(), mainSrtPath));
 
             // 5. Create complex filter for slideshow with backgrounds and subtitles
@@ -343,13 +354,15 @@ app.post('/generate-video', upload.any(), async (req, res) => {
                 ...imageInputs.map((_, i) => `[redimg${i}][botbg${i}]overlay=0:1280:shortest=1,scale=1080:1920,setsar=1[finalbg${i}]`),
                 // 슬라이드 연결
                 imageInputs.map((_, i) => `[finalbg${i}]`).join('') + `concat=n=${imageInputs.length}:v=1:a=0[bgv]`,
-                // 자막 추가 (3단계: 메인 제목 → 소제목 → 본문)
+                // 자막 추가 (4단계: 메인 제목 → 소제목 → 채널명 → 본문)
                 // 1) 메인 제목 (Arial Black - 매우 굵은 폰트) - 위치 10만큼 아래로
                 `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=Arial Black,FontSize=24,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000FF&,Outline=3,Shadow=3,Alignment=2,MarginV=220' [withtitle]`,
                 // 2) 소제목 (Malgun Gothic Bold)
                 `[withtitle]subtitles='${relativeSubtitleSubsPath}':charenc=UTF-8:force_style='FontName=Malgun Gothic,FontSize=18,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=2,MarginV=200' [withsubtitle]`,
-                // 3) 본문 자막 (Malgun Gothic, FontSize=12) - MarginV=60
-                `[withsubtitle]subtitles='${relativeMainSubsPath}':charenc=UTF-8:force_style='FontName=Malgun Gothic,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=2,MarginV=60' [v]`
+                // 3) 채널 이름 (오른쪽 위, Courier New 타자기 느낌, 작은 사이즈)
+                `[withsubtitle]subtitles='${relativeChannelSubsPath}':charenc=UTF-8:force_style='FontName=Courier New,FontSize=11,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=3,MarginV=250,MarginR=35' [withchannel]`,
+                // 4) 본문 자막 (Malgun Gothic, FontSize=12) - MarginV=60
+                `[withchannel]subtitles='${relativeMainSubsPath}':charenc=UTF-8:force_style='FontName=Malgun Gothic,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=2,MarginV=60' [v]`
             ].join(';');
 
             // 6. Create ffmpeg command with multiple image inputs
@@ -384,6 +397,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             console.log('Filter:', filter);
             console.log('Title:', title);
             console.log('Final Subtitle:', finalSubtitle);
+            console.log('Final Channel Name:', finalChannelName);
 
             // Execute the command
             const ffmpegProcess = spawn('C:/Users/User/Desktop/news/ffmpeg.exe', ffmpegArgs);
