@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, Variants, AnimatePresence, useInView, animate } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Check, Star, Video, Type, ArrowRight, Menu, X, BrainCircuit, Bot, Sparkles, User, MessageSquare, Newspaper, FileText, Play, Zap, TrendingUp, ClipboardPaste, Cpu, Download, LogIn, Gift, LogOut, Settings, Sticker, MicVocal, MessageCircleHeart, ChevronDown, Youtube, Instagram, Facebook, HelpCircle } from 'lucide-react'
+import { Check, ArrowRight, Menu, X, Sparkles, User, MessageSquare, Play, ClipboardPaste, Cpu, Download, LogIn, Gift, LogOut, Settings, Sticker, MicVocal, MessageCircleHeart, HelpCircle } from 'lucide-react'
 import { Accordion } from '@/components/ui/Accordion'
 import { Footer } from '@/components/layout/Footer'
 import { useAuth } from '@/contexts/AuthContext'
@@ -76,10 +76,6 @@ export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [showProfileDropdown, setShowProfileDropdown] = useState(false)
-  
-  const heroRef = useRef(null)
-  const navRef = useRef(null)
-  const loginModalRef = useRef(null)
 
   const statsRef = useRef<HTMLSpanElement>(null);
   const isStatsInView = useInView(statsRef, { once: true, amount: 0.5 });
