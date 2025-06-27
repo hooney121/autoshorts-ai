@@ -151,7 +151,7 @@ export default function Create() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const [progress, setProgress] = useState<string>('')
+  const [progress, setProgress] = useState<number>(0)
   const [voice, setVoice] = useState('21m00Tcm4TlvDq8ikWAM')
   const [titleFont, setTitleFont] = useState('Arial Black')
   const [subtitleFont, setSubtitleFont] = useState('Malgun Gothic')
@@ -236,7 +236,24 @@ export default function Create() {
     setIsLoading(true)
     setError(null)
     setVideoUrl(null)
-    setProgress('사용자 인증 및 사용량 확인 중...')
+    setProgress(0)
+
+    // SSE 연결 설정
+    const eventSource = new EventSource('https://onminds.ngrok.app/progress');
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setProgress(data.progress);
+      } catch (error) {
+        console.error('Progress parsing error:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      eventSource.close();
+    };
 
     try {
       const token = await user.getIdToken();
@@ -274,8 +291,6 @@ export default function Create() {
       images.forEach((image) => {
         formData.append('images', image)
       })
-
-      setProgress('데이터 업로드 및 처리 시작 중...')
       
       const response = await fetch('https://onminds.ngrok.app/generate-video', {
         method: 'POST',
@@ -289,8 +304,6 @@ export default function Create() {
         const errData = await response.json()
         throw new Error(errData.error || '영상 제작에 실패했습니다.')
       }
-
-      setProgress('영상 생성 완료! 다운로드 중...')
       
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
@@ -311,7 +324,8 @@ export default function Create() {
       }
     } finally {
       setIsLoading(false)
-      setProgress('')
+      setProgress(0)
+      eventSource.close();
     }
   }
 
@@ -345,6 +359,145 @@ export default function Create() {
       setPreviewLoading(null);
     }
   };
+
+  // 진행률에 따른 단계 메시지 함수
+  const getProgressMessage = (progress: number) => {
+    if (progress <= 5) return "기사 내용 추출 중...";
+    if (progress <= 15) return "AI 스크립트 생성 중...";
+    if (progress <= 25) return "음성 합성 중...";
+    if (progress <= 35) return "자막 생성 중...";
+    if (progress <= 45) return "이미지 준비 중...";
+    if (progress <= 60) return "영상 제작 중...";
+    if (progress <= 100) return "완료! 다운로드 중...";
+    return "처리 중...";
+  };
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-black via-red-900 to-blue-900 overflow-hidden">
+        {/* 배경 파티클 효과 */}
+        <div className="absolute inset-0 overflow-hidden">
+          {[...Array(20)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-2 h-2 bg-white rounded-full animate-pulse"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${2 + Math.random() * 2}s`
+              }}
+            />
+          ))}
+        </div>
+
+        {/* 메인 로딩 컨테이너 */}
+        <div className="relative bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl p-8 w-full max-w-md mx-4 overflow-hidden">
+          {/* 상단 그라데이션 오버레이 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent" />
+          
+          {/* 좌측 상단 장식 */}
+          <div className="absolute -top-4 -left-4 w-8 h-8 bg-gradient-to-br from-red-500 to-pink-600 rounded-full animate-pulse" />
+          <div className="absolute -top-2 -left-2 w-4 h-4 bg-gradient-to-br from-orange-400 to-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+          
+          {/* 우측 상단 장식 */}
+          <div className="absolute -top-4 -right-4 w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute -top-2 -right-2 w-4 h-4 bg-gradient-to-br from-indigo-400 to-blue-500 rounded-full animate-pulse" style={{ animationDelay: '1.5s' }} />
+
+          <div className="relative z-10 flex flex-col items-center">
+            {/* 메인 스피너 */}
+            <div className="relative mb-8">
+              {/* 외부 링 */}
+              <div className="w-24 h-24 border-4 border-white/20 rounded-full animate-spin" />
+              
+              {/* 내부 링 */}
+              <div className="absolute inset-2 w-20 h-20 border-4 border-transparent border-t-red-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+              
+              {/* 중앙 링 */}
+              <div className="absolute inset-4 w-16 h-16 border-4 border-transparent border-b-blue-500 rounded-full animate-spin" style={{ animationDuration: '2s' }} />
+              
+              {/* 중앙 아이콘 */}
+              <div className="absolute inset-6 w-12 h-12 bg-gradient-to-br from-red-500 to-blue-600 rounded-full flex items-center justify-center animate-pulse">
+                <svg className="w-6 h-6 text-white animate-bounce" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+
+            {/* 제목 */}
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-black bg-gradient-to-r from-red-400 via-pink-400 to-blue-400 text-transparent bg-clip-text mb-2 animate-pulse">
+                AI가 쇼츠 영상을 만드는 중입니다
+              </h2>
+              <div className="text-sm text-white/60 font-medium">
+                {getProgressMessage(progress)}
+              </div>
+            </div>
+
+            {/* 진행률 바 */}
+            <div className="w-full mb-4">
+              <div className="relative">
+                {/* 배경 바 */}
+                <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
+                  {/* 그라데이션 진행률 바 */}
+                  <div 
+                    className="h-full bg-gradient-to-r from-red-500 via-pink-500 to-blue-500 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
+                    style={{ width: `${progress}%` }}
+                  >
+                    {/* 반짝이는 효과 */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" style={{ animationDelay: '0.5s' }} />
+                  </div>
+                </div>
+                
+                {/* 진행률 퍼센트 */}
+                <div className="absolute -top-8 right-0 bg-gradient-to-r from-red-500 to-blue-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow-lg">
+                  {progress}%
+                </div>
+              </div>
+            </div>
+
+            {/* 하단 장식 요소들 */}
+            <div className="flex items-center gap-4 mt-4">
+              <div className="flex gap-1">
+                {[...Array(3)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 bg-gradient-to-r from-red-400 to-pink-400 rounded-full animate-bounce"
+                    style={{ animationDelay: `${i * 0.2}s` }}
+                  />
+                ))}
+              </div>
+              
+              <div className="text-xs text-white/50 font-medium">
+                잠시만 기다려주세요...
+              </div>
+              
+              <div className="flex gap-1">
+                {[...Array(3)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-2 h-2 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full animate-bounce"
+                    style={{ animationDelay: `${(i + 3) * 0.2}s` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 하단 그라데이션 오버레이 */}
+          <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white/10 to-transparent" />
+        </div>
+
+        {/* 추가 배경 효과 */}
+        <div className="absolute inset-0 pointer-events-none">
+          {/* 움직이는 원형 그라데이션 */}
+          <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-gradient-to-r from-red-500/20 to-pink-500/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-gradient-to-r from-blue-500/20 to-indigo-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

@@ -52,6 +52,39 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// SSE를 위한 클라이언트 연결 관리
+let clients = new Set();
+
+// SSE 엔드포인트 추가
+app.get('/progress', (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    const clientId = Date.now();
+    const newClient = {
+        id: clientId,
+        res
+    };
+
+    clients.add(newClient);
+
+    req.on('close', () => {
+        clients.delete(newClient);
+    });
+});
+
+// 진행률 전송 함수
+function sendProgress(progress) {
+    clients.forEach(client => {
+        client.res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+    });
+}
+
 // --- Helper Functions (Moved from Next.js API) ---
 
 async function extractArticleContent(url) {
@@ -244,27 +277,32 @@ app.post('/generate-video', upload.any(), async (req, res) => {
         tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'video-session-'));
         console.log(`[SETUP] Temp directory created at: ${tempDir}`);
 
-        console.log("[STEP 1/7] Extracting article content...");
+        console.log("[STEP 1/7] Extracting article content... (5%)");
+        sendProgress(5);
         const articleContent = await extractArticleContent(newsUrl);
         console.log("[STEP 1/7] Article content extracted successfully.");
 
-        console.log("[STEP 2/7] Generating script...");
+        console.log("[STEP 2/7] Generating script... (15%)");
+        sendProgress(15);
         const script = await generateScript(articleContent, title);
         console.log(`[STEP 2/7] Script generated: ${script.substring(0, 50)}...`);
 
-        console.log("[STEP 3/7] Generating speech...");
+        console.log("[STEP 3/7] Generating speech... (25%)");
+        sendProgress(25);
         const audioBuffer = await generateSpeech(script, voice);
         const audioFilePath = path.join(tempDir, 'audio.mp3');
         fs.writeFileSync(audioFilePath, audioBuffer);
         console.log("[STEP 3/7] Speech generated and saved.");
 
-        console.log("[STEP 4/7] Generating subtitles...");
+        console.log("[STEP 4/7] Generating subtitles... (35%)");
+        sendProgress(35);
         const srtContent = await generateSubtitles(audioBuffer);
         const srtFilePath = path.join(tempDir, 'subtitles.srt');
         fs.writeFileSync(srtFilePath, srtContent);
         console.log("[STEP 4/7] Subtitles generated and saved.");
         
-        console.log("[STEP 5/7] Preparing images...");
+        console.log("[STEP 5/7] Preparing images... (45%)");
+        sendProgress(45);
         let imagePaths = [];
         // Add user-uploaded images first
         if (req.files && req.files.length > 0) {
@@ -294,7 +332,8 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             console.log(`[STEP 5/7] Downloaded ${unsplashUrls.length} images from Unsplash.`);
         }
         
-        console.log("[STEP 6/7] Starting FFMPEG video generation (using direct command)...");
+        console.log("[STEP 6/7] Starting FFMPEG video generation (using direct command)... (60%)");
+        sendProgress(60);
         const finalOutputPath = path.join('C:/Users/User/Desktop/outputs', `${title.replace(/[^a-z0-9]/gi, '_')}.mp4`);
         if (!fs.existsSync('C:/Users/User/Desktop/outputs')) {
             fs.mkdirSync('C:/Users/User/Desktop/outputs');
@@ -448,6 +487,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             ffmpegProcess.on('close', (code) => {
                 if (code === 0) {
                     console.log('[STEP 6/7] Video generation finished successfully.');
+                    sendProgress(100);
                     resolve();
                 } else {
                     console.error(`ffmpeg process exited with code ${code}`);
@@ -462,7 +502,7 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             });
         });
 
-        console.log("[STEP 7/7] Sending video to client...");
+        console.log("[STEP 7/7] Sending video to client... (100%)");
         res.download(finalOutputPath, path.basename(finalOutputPath), (err) => {
             if (err) {
                 console.error('Download error:', err);
