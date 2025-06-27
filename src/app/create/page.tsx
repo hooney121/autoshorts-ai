@@ -7,6 +7,140 @@ import { ArrowLeft, Upload, X, Volume2, Loader2, Square } from 'lucide-react'
 import Image from 'next/image'
 import { useDropzone } from 'react-dropzone'
 
+// 모달용 컴포넌트 추가
+interface FontSettingModalProps {
+  open: boolean;
+  onClose: () => void;
+  font: string;
+  setFont: (v: string) => void;
+  fontOptions: { value: string; label: string; preview: string }[];
+  label: string;
+  color: string;
+  setColor: (v: string) => void;
+  outline: string;
+  setOutline: (v: string) => void;
+  outlineWidth: number;
+  setOutlineWidth: (v: number) => void;
+}
+
+// 색상 프리셋 배열을 두 그룹으로 분리
+const colorPresetsNoOutline = [
+  { color: '#fff', outline: '#000000', outlineWidth: 0, label: '흰(획X)' },
+  { color: '#ffe600', outline: '#000000', outlineWidth: 0, label: '노(획X)' },
+  { color: '#ff3b3b', outline: '#000000', outlineWidth: 0, label: '빨(획X)' },
+  { color: '#00e0ff', outline: '#000000', outlineWidth: 0, label: '하늘(획X)' },
+  { color: '#222', outline: '#000000', outlineWidth: 0, label: '검(획X)' },
+  { color: '#b366ff', outline: '#000000', outlineWidth: 0, label: '보라(획X)' },
+  { color: '#ff3bff', outline: '#000000', outlineWidth: 0, label: '핑크(획X)' },
+];
+const colorPresetsWithOutline = [
+  { color: '#fff', outline: '#222', outlineWidth: 2.5, label: '흰+검' },
+  { color: '#222', outline: '#fff', outlineWidth: 2.5, label: '검+흰' },
+  { color: '#ffe600', outline: '#222', outlineWidth: 2.5, label: '노+검' },
+  { color: '#ff3b3b', outline: '#fff', outlineWidth: 2.5, label: '빨+흰' },
+  { color: '#00e0ff', outline: '#222', outlineWidth: 2.5, label: '하늘+검' },
+  { color: '#ffb800', outline: '#222', outlineWidth: 2.5, label: '주+검' },
+  { color: '#fff', outline: '#ff3b3b', outlineWidth: 2.5, label: '흰+빨' },
+  { color: '#fff', outline: '#ffe600', outlineWidth: 2.5, label: '흰+노' },
+  { color: '#fff', outline: '#00e0ff', outlineWidth: 2.5, label: '흰+하늘' },
+  { color: '#ff3b3b', outline: '#ffe600', outlineWidth: 2.5, label: '빨+노' },
+  { color: '#ff3b3b', outline: '#222', outlineWidth: 2.5, label: '빨+검' },
+  { color: '#ffe600', outline: '#ff3b3b', outlineWidth: 2.5, label: '노+빨' },
+  { color: '#00e0ff', outline: '#fff', outlineWidth: 2.5, label: '하늘+흰' },
+  { color: '#b366ff', outline: '#222', outlineWidth: 2.5, label: '보라+검' },
+  { color: '#ff3bff', outline: '#fff', outlineWidth: 2.5, label: '핑크+흰' },
+];
+
+function FontSettingModal({ open, onClose, font, setFont, fontOptions, label, color, setColor, outline, setOutline, outlineWidth, setOutlineWidth }: FontSettingModalProps) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 text-xl">×</button>
+        <h2 className="text-2xl font-extrabold mb-6 text-gray-800">{label} 디자인 설정</h2>
+        <div className="mb-6">
+          <div className="mb-2 text-lg font-bold text-[#111]">폰트</div>
+          <select value={font} onChange={e => setFont(e.target.value)} className="w-full px-3 py-2 border rounded-lg">
+            {fontOptions.map(font => <option key={font.value} value={font.value}>{font.label}</option>)}
+          </select>
+        </div>
+        <div className="mb-6">
+          <div className="mb-2 text-lg font-bold text-[#111]">자막 색상</div>
+          <div className="mb-1 text-sm font-bold text-gray-600">획 없음</div>
+          <div className="grid grid-cols-5 gap-2 mb-3">
+            {colorPresetsNoOutline.map((preset, i) => (
+              <div
+                key={i}
+                className={`rounded-lg px-2 py-2 text-center cursor-pointer border-4 ${color === preset.color && outline === preset.outline && outlineWidth === 0 ? 'border-blue-500 shadow-lg' : 'border-[#222]'}`}
+                style={{ background: '#111', minWidth: 80, minHeight: 54, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={() => { setColor(preset.color); setOutline(preset.outline); setOutlineWidth(0); }}
+              >
+                <span style={{
+                  color: preset.color,
+                  WebkitTextStroke: `0px ${preset.outline}`,
+                  fontWeight: 900,
+                  fontSize: 28,
+                  textShadow: `0 2px 8px #000`,
+                  letterSpacing: 1,
+                  lineHeight: 1.1,
+                  fontFamily: font,
+                }}>
+                  자막 색상
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mb-1 text-sm font-bold text-gray-600">획 있음</div>
+          <div className="grid grid-cols-5 gap-2">
+            {colorPresetsWithOutline.map((preset, i) => (
+              <div
+                key={i}
+                className={`rounded-lg px-2 py-2 text-center cursor-pointer border-4 ${color === preset.color && outline === preset.outline && outlineWidth !== 0 ? 'border-blue-500 shadow-lg' : 'border-[#222]'}`}
+                style={{ background: '#111', minWidth: 80, minHeight: 54, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={() => { setColor(preset.color); setOutline(preset.outline); setOutlineWidth(2.5); }}
+              >
+                <span style={{
+                  color: preset.color,
+                  WebkitTextStroke: `${preset.outlineWidth}px ${preset.outline}`,
+                  fontWeight: 900,
+                  fontSize: 28,
+                  textShadow: `0 2px 8px #000, 0 0 2px ${preset.outline}, 0 0 8px #000`,
+                  letterSpacing: 1,
+                  lineHeight: 1.1,
+                  fontFamily: font,
+                }}>
+                  자막 색상
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-10 mb-2 flex justify-center">
+          <span
+            style={{
+              fontFamily: font,
+              color: color,
+              WebkitTextStroke: `2.5px ${outline}`,
+              fontWeight: 900,
+              fontSize: 44,
+              background: '#111',
+              padding: '18px 40px',
+              borderRadius: 18,
+              display: 'inline-block',
+              boxShadow: '0 4px 24px 0 rgba(0,0,0,0.25)',
+              textShadow: `0 2px 8px #000, 0 0 2px ${outline}, 0 0 8px #000`,
+              letterSpacing: 2,
+            }}
+          >
+            오늘의 1분 요약!
+          </span>
+        </div>
+        <button onClick={onClose} className="mt-8 w-full bg-black text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition">저장</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Create() {
   const { user } = useAuth()
   const [newsUrl, setNewsUrl] = useState('')
@@ -19,6 +153,28 @@ export default function Create() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState<string>('')
   const [voice, setVoice] = useState('21m00Tcm4TlvDq8ikWAM')
+  const [titleFont, setTitleFont] = useState('Arial Black')
+  const [subtitleFont, setSubtitleFont] = useState('Malgun Gothic')
+  const [channelFont, setChannelFont] = useState('Courier New')
+  const [scriptFont, setScriptFont] = useState('Malgun Gothic')
+  const [titleFontModal, setTitleFontModal] = useState(false);
+  const [subtitleFontModal, setSubtitleFontModal] = useState(false);
+  const [channelFontModal, setChannelFontModal] = useState(false);
+  const [scriptFontModal, setScriptFontModal] = useState(false);
+  const [titleColor, setTitleColor] = useState('#fff');
+  const [titleOutline, setTitleOutline] = useState('#222');
+  const [subtitleColor, setSubtitleColor] = useState('#fff');
+  const [subtitleOutline, setSubtitleOutline] = useState('#222');
+  const [channelColor, setChannelColor] = useState('#fff');
+  const [channelOutline, setChannelOutline] = useState('#222');
+  const [scriptColor, setScriptColor] = useState('#fff');
+  const [scriptOutline, setScriptOutline] = useState('#222');
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
+  const previewAudio = useRef<HTMLAudioElement | null>(null);
+  const [titleOutlineWidth, setTitleOutlineWidth] = useState(2.5);
+  const [subtitleOutlineWidth, setSubtitleOutlineWidth] = useState(2.5);
+  const [channelOutlineWidth, setChannelOutlineWidth] = useState(2.5);
+  const [scriptOutlineWidth, setScriptOutlineWidth] = useState(2.5);
 
   const MAX_IMAGES = 6
 
@@ -31,8 +187,17 @@ export default function Create() {
     { id: 'VR6AewLTigWG4xSOukaG', label: '준호 (남성, 부드럽고 저음)', sample: '/voices/junho.mp3' },
     { id: 'EXAVITQu4vr4xnSDxMaL', label: '소연 (여성, 친근하고 자연스러움)', sample: '/voices/soyeon.mp3' },
   ];
-  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
-  const previewAudio = useRef<HTMLAudioElement | null>(null);
+
+  const fontOptions = [
+    { value: 'Arial Black', label: 'Arial Black (굵고 임팩트)', preview: 'Arial Black' },
+    { value: 'Malgun Gothic', label: '맑은 고딕 (깔끔하고 읽기 쉬움)', preview: '맑은 고딕' },
+    { value: 'Batang', label: '바탕체 (전통적이고 신뢰감)', preview: '바탕체' },
+    { value: 'Gulim', label: '굴림체 (부드럽고 친근함)', preview: '굴림체' },
+    { value: 'Dotum', label: '돋움체 (명확하고 현대적)', preview: '돋움체' },
+    { value: 'Courier New', label: 'Courier New (타자기 느낌)', preview: 'Courier New' },
+    { value: 'Times New Roman', label: 'Times New Roman (클래식)', preview: 'Times New Roman' },
+    { value: 'Verdana', label: 'Verdana (현대적이고 깔끔)', preview: 'Verdana' },
+  ];
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length + images.length > MAX_IMAGES) {
@@ -82,6 +247,18 @@ export default function Create() {
       formData.append('subtitle', subtitle)
       formData.append('channelName', channelName)
       formData.append('voice', voice)
+      formData.append('titleFont', titleFont)
+      formData.append('subtitleFont', subtitleFont)
+      formData.append('channelFont', channelFont)
+      formData.append('scriptFont', scriptFont)
+      formData.append('titleColor', titleColor)
+      formData.append('titleOutline', titleOutline)
+      formData.append('subtitleColor', subtitleColor)
+      formData.append('subtitleOutline', subtitleOutline)
+      formData.append('channelColor', channelColor)
+      formData.append('channelOutline', channelOutline)
+      formData.append('scriptColor', scriptColor)
+      formData.append('scriptOutline', scriptOutline)
       
       // 소제목 디버깅 로그 추가
       console.log("=== FRONTEND SUBTITLE DEBUG ===");
@@ -190,7 +367,7 @@ export default function Create() {
           
         <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-2xl shadow-lg">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">뉴스 URL</label>
+            <label className="block text-2xl font-extrabold text-[#111] mb-2">뉴스 URL</label>
             <input
               type="url"
               value={newsUrl}
@@ -203,58 +380,69 @@ export default function Create() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">영상 제목</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
-              placeholder="쇼츠 영상의 제목을 입력하세요"
-              required
-              disabled={isLoading}
-            />
+            <label className="block text-2xl font-extrabold text-[#111] mb-2">영상 제목</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                placeholder="쇼츠 영상의 제목을 입력하세요"
+                required
+                disabled={isLoading}
+              />
+              <button type="button" onClick={() => setTitleFontModal(true)} className="px-4 py-2 text-base rounded-lg bg-black text-white font-bold whitespace-nowrap shadow hover:bg-gray-900 transition">디자인 선택 &gt;</button>
+            </div>
+          </div>
+          <FontSettingModal open={titleFontModal} onClose={() => setTitleFontModal(false)} font={titleFont} setFont={setTitleFont} fontOptions={fontOptions} label="제목" color={titleColor} setColor={setTitleColor} outline={titleOutline} setOutline={setTitleOutline} outlineWidth={titleOutlineWidth} setOutlineWidth={setTitleOutlineWidth} />
+
+          <div>
+            <label className="block text-2xl font-extrabold text-[#111] mb-2">소제목 <span className="text-gray-500 text-xs ml-1">(선택사항, 10자 이내 권장)</span></label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={subtitle}
+                onChange={(e) => setSubtitle(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                placeholder="속보! 또는 긴급!"
+                maxLength={15}
+                disabled={isLoading}
+              />
+              <button type="button" onClick={() => setSubtitleFontModal(true)} className="px-4 py-2 text-base rounded-lg bg-black text-white font-bold whitespace-nowrap shadow hover:bg-gray-900 transition">디자인 선택 &gt;</button>
+            </div>
+            <FontSettingModal open={subtitleFontModal} onClose={() => setSubtitleFontModal(false)} font={subtitleFont} setFont={setSubtitleFont} fontOptions={fontOptions} label="소제목" color={subtitleColor} setColor={setSubtitleColor} outline={subtitleOutline} setOutline={setSubtitleOutline} outlineWidth={subtitleOutlineWidth} setOutlineWidth={setSubtitleOutlineWidth} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              소제목 
-              <span className="text-gray-500 text-xs ml-1">(선택사항, 10자 이내 권장)</span>
-            </label>
-            <input
-              type="text"
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
-              placeholder="속보! 또는 긴급!"
-              maxLength={15}
-              disabled={isLoading}
-            />
+            <label className="block text-2xl font-extrabold text-[#111] mb-2">채널 이름 <span className="text-gray-500 text-xs ml-1">(선택사항, 10자 이내 권장)</span></label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={channelName}
+                onChange={(e) => setChannelName(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
+                placeholder="채널 이름을 입력하세요"
+                maxLength={10}
+                disabled={isLoading}
+              />
+              <button type="button" onClick={() => setChannelFontModal(true)} className="px-4 py-2 text-base rounded-lg bg-black text-white font-bold whitespace-nowrap shadow hover:bg-gray-900 transition">디자인 선택 &gt;</button>
+            </div>
+            <FontSettingModal open={channelFontModal} onClose={() => setChannelFontModal(false)} font={channelFont} setFont={setChannelFont} fontOptions={fontOptions} label="채널명" color={channelColor} setColor={setChannelColor} outline={channelOutline} setOutline={setChannelOutline} outlineWidth={channelOutlineWidth} setOutlineWidth={setChannelOutlineWidth} />
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-2xl font-extrabold text-[#111]">대본 폰트</label>
+              <button type="button" onClick={() => setScriptFontModal(true)} className="px-4 py-2 text-base rounded-lg bg-black text-white font-bold whitespace-nowrap shadow hover:bg-gray-900 transition">디자인 선택 &gt;</button>
+            </div>
+            <FontSettingModal open={scriptFontModal} onClose={() => setScriptFontModal(false)} font={scriptFont} setFont={setScriptFont} fontOptions={fontOptions} label="대본" color={scriptColor} setColor={setScriptColor} outline={scriptOutline} setOutline={setScriptOutline} outlineWidth={scriptOutlineWidth} setOutlineWidth={setScriptOutlineWidth} />
             <p className="text-xs text-gray-500 mt-1">
-              소제목을 입력하지 않으면 AI가 자동으로 생성합니다
+              본문 자막에 사용될 폰트를 선택하세요
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              채널 이름 
-              <span className="text-gray-500 text-xs ml-1">(선택사항, 10자 이내 권장)</span>
-            </label>
-            <input
-              type="text"
-              value={channelName}
-              onChange={(e) => setChannelName(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
-              placeholder="채널 이름을 입력하세요"
-              maxLength={10}
-              disabled={isLoading}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              채널 이름을 입력하지 않으면 AI가 자동으로 생성합니다
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">목소리 선택</label>
+            <label className="block text-2xl font-extrabold text-[#111] mb-2">목소리 선택</label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
               {voiceOptions.map(opt => {
                 const isPlaying = previewLoading === opt.id;
@@ -314,8 +502,8 @@ export default function Create() {
             <p className="text-xs text-gray-500 mt-1">한국어에 최적화된 다양한 목소리를 선택할 수 있습니다.</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="mt-10">
+            <label className="block text-2xl font-extrabold text-[#111] mb-2">
               이미지 업로드 (선택사항, 최대 {MAX_IMAGES}개)
             </label>
             <div

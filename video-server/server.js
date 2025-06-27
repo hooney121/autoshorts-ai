@@ -170,16 +170,29 @@ async function extractKeyword(text) {
 
 async function fetchUnsplashImages(keyword, count) {
     try {
-        const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&per_page=${count}&orientation=portrait&client_id=${process.env.UNSPLASH_ACCESS_KEY}`);
+        const response = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(keyword)}&per_page=${count}&orientation=landscape&client_id=${process.env.UNSPLASH_ACCESS_KEY}`);
         if (!response.ok) {
             throw new Error(`Unsplash API error: ${response.statusText}`);
         }
         const data = await response.json();
-        return data.results.map(photo => photo.urls.regular);
+        // 최대 해상도(full/raw) 우선, 없으면 regular
+        return data.results.map(photo => photo.urls.full || photo.urls.raw || photo.urls.regular);
     } catch (error) {
         console.error('Error fetching from Unsplash:', error);
         return [];
     }
+}
+
+// hex 색상(#RRGGBB) → ASS 색상 코드로 변환 함수 추가
+function hexToASS(hex) {
+  // #RRGGBB → &H00BBGGRR&
+  if (!hex) return '&H00FFFFFF&';
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return '&H00FFFFFF&';
+  const r = h.substring(0,2);
+  const g = h.substring(2,4);
+  const b = h.substring(4,6);
+  return `&H00${b}${g}${r}&`;
 }
 
 // --- Global Error Handlers ---
@@ -201,7 +214,8 @@ app.post('/generate-video', upload.any(), async (req, res) => {
     console.log("req.files (file fields):", req.files);
     console.log("-----------------");
 
-    const { newsUrl, title, subtitle, channelName, voice } = req.body;
+    const { newsUrl, title, subtitle, channelName, voice, titleFont, subtitleFont, channelFont, scriptFont,
+      titleColor, titleOutline, subtitleColor, subtitleOutline, channelColor, channelOutline, scriptColor, scriptOutline } = req.body;
     
     // 소제목 디버깅 로그 추가
     console.log("=== SUBTITLE DEBUG ===");
@@ -210,6 +224,10 @@ app.post('/generate-video', upload.any(), async (req, res) => {
     console.log("Subtitle length:", subtitle ? subtitle.length : 'undefined');
     console.log("Subtitle trimmed:", subtitle ? subtitle.trim() : 'undefined');
     console.log("Channel name:", channelName);
+    console.log("Title font:", titleFont);
+    console.log("Subtitle font:", subtitleFont);
+    console.log("Channel font:", channelFont);
+    console.log("Script font:", scriptFont);
     console.log("=====================");
     
     if (!newsUrl || !title) {
@@ -299,6 +317,22 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             const finalChannelName = channelName && channelName.trim() ? channelName.trim() : "뉴스 채널";
             console.log(`[CHANNEL] Using channel name: ${finalChannelName}`);
             
+            // 폰트 처리
+            const finalTitleFont = titleFont && titleFont.trim() ? titleFont.trim() : "Arial Black";
+            const finalSubtitleFont = subtitleFont && subtitleFont.trim() ? subtitleFont.trim() : "Malgun Gothic";
+            const finalChannelFont = channelFont && channelFont.trim() ? channelFont.trim() : "Courier New";
+            const finalScriptFont = scriptFont && scriptFont.trim() ? scriptFont.trim() : "Malgun Gothic";
+            // 색상/획 처리
+            const finalTitleColor = hexToASS(titleColor) || '&H00FFFFFF&';
+            const finalTitleOutline = hexToASS(titleOutline) || '&H000000FF&';
+            const finalSubtitleColor = hexToASS(subtitleColor) || '&H00FFFFFF&';
+            const finalSubtitleOutline = hexToASS(subtitleOutline) || '&H000000&';
+            const finalChannelColor = hexToASS(channelColor) || '&H00FFFFFF&';
+            const finalChannelOutline = hexToASS(channelOutline) || '&H000000&';
+            const finalScriptColor = hexToASS(scriptColor) || '&H00FFFFFF&';
+            const finalScriptOutline = hexToASS(scriptOutline) || '&H000000&';
+            console.log(`[FONTS] Title: ${finalTitleFont}, Subtitle: ${finalSubtitleFont}, Channel: ${finalChannelFont}, Script: ${finalScriptFont}`);
+            
             // 본문 스크립트는 AI가 생성한 것을 사용 (소제목 제외)
             const scriptLines = script.split('\n').filter(line => line.trim());
             const mainScript = scriptLines.slice(1).join('\n'); // 첫 번째 줄(AI 소제목) 제외하고 나머지가 본문
@@ -345,21 +379,21 @@ app.post('/generate-video', upload.any(), async (req, res) => {
                 // 각 슬라이드별 배경 생성
                 ...imageInputs.map((_, i) => `color=black:s=1080x1920[topbg${i}]`),
                 ...imageInputs.map((_, i) => `color=black:s=1080x640[botbg${i}]`),
-                // 각 이미지 처리 및 합성
-                ...imageInputs.map((_, i) => `[${i}:v]scale=1080:640[midimg${i}]`),
-                ...imageInputs.map((_, i) => `[topbg${i}][midimg${i}]overlay=0:640:shortest=1[redimg${i}]`),
-                ...imageInputs.map((_, i) => `[redimg${i}][botbg${i}]overlay=0:1280:shortest=1,scale=1080:1920,setsar=1[finalbg${i}]`),
+                // 각 이미지 처리 및 합성 - 이미지가 상단 제목 영역을 침범하지 않도록 제한
+                ...imageInputs.map((_, i) => `[${i}:v]scale=1080:1200:force_original_aspect_ratio=decrease,pad=1080:1200:(ow-iw)/2:(oh-ih)/2:color=black[midimg${i}]`),
+                ...imageInputs.map((_, i) => `[topbg${i}][midimg${i}]overlay=0:400:shortest=1[redimg${i}]`),
+                ...imageInputs.map((_, i) => `[redimg${i}][botbg${i}]overlay=0:1600:shortest=1,scale=1080:1920,setsar=1[finalbg${i}]`),
                 // 슬라이드 연결
                 imageInputs.map((_, i) => `[finalbg${i}]`).join('') + `concat=n=${imageInputs.length}:v=1:a=0[bgv]`,
                 // 자막 추가 (4단계: 메인 제목 → 소제목 → 채널명 → 본문)
-                // 1) 메인 제목 (Arial Black - 매우 굵은 폰트) - 위치 10만큼 아래로
-                `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=Arial Black,FontSize=24,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000FF&,Outline=3,Shadow=3,Alignment=2,MarginV=220' [withtitle]`,
-                // 2) 소제목 (Malgun Gothic Bold)
-                `[withtitle]subtitles='${relativeSubtitleSubsPath}':charenc=UTF-8:force_style='FontName=Malgun Gothic,FontSize=18,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=2,MarginV=200' [withsubtitle]`,
-                // 3) 채널 이름 (오른쪽 위, Courier New 타자기 느낌, 작은 사이즈)
-                `[withsubtitle]subtitles='${relativeChannelSubsPath}':charenc=UTF-8:force_style='FontName=Courier New,FontSize=11,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=3,MarginV=250,MarginR=35' [withchannel]`,
-                // 4) 본문 자막 (Malgun Gothic, FontSize=12) - MarginV=60
-                `[withchannel]subtitles='${relativeMainSubsPath}':charenc=UTF-8:force_style='FontName=Malgun Gothic,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,OutlineColour=&H000000&,Outline=0,Shadow=1,Alignment=2,MarginV=60' [v]`
+                // 1) 메인 제목
+                `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=${finalTitleFont},FontSize=24,Bold=1,PrimaryColour=${finalTitleColor},OutlineColour=${finalTitleOutline},Outline=3,Shadow=3,Alignment=2,MarginV=220' [withtitle]`,
+                // 2) 소제목
+                `[withtitle]subtitles='${relativeSubtitleSubsPath}':charenc=UTF-8:force_style='FontName=${finalSubtitleFont},FontSize=18,Bold=1,PrimaryColour=${finalSubtitleColor},OutlineColour=${finalSubtitleOutline},Outline=2,Shadow=1,Alignment=2,MarginV=200' [withsubtitle]`,
+                // 3) 채널 이름
+                `[withsubtitle]subtitles='${relativeChannelSubsPath}':charenc=UTF-8:force_style='FontName=${finalChannelFont},FontSize=11,Bold=1,PrimaryColour=${finalChannelColor},OutlineColour=${finalChannelOutline},Outline=3,Shadow=1,Alignment=3,MarginV=250,MarginR=35' [withchannel]`,
+                // 4) 본문 자막
+                `[withchannel]subtitles='${relativeMainSubsPath}':charenc=UTF-8:force_style='FontName=${finalScriptFont},FontSize=12,Bold=1,PrimaryColour=${finalScriptColor},OutlineColour=${finalScriptOutline},Outline=2,Shadow=1,Alignment=2,MarginV=60' [v]`
             ].join(';');
 
             // 6. Create ffmpeg command with multiple image inputs
