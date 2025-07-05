@@ -35,7 +35,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: ['https://autoshortsai.vercel.app', 'http://localhost:3000'],
+  origin: true,  // 모든 origin 허용
   methods: ['GET', 'POST'],
 }));
 
@@ -228,6 +228,13 @@ function hexToASS(hex) {
   return `&H00${b}${g}${r}&`;
 }
 
+// opacity(0~1) → ASS 알파값(00~FF) 변환 함수 추가
+function opacityToASSAlpha(opacity) {
+  // opacity: 0(불투명) ~ 1(완전투명) → ASS: 00(불투명) ~ FF(투명)
+  const alpha = Math.round((1 - parseFloat(opacity)) * 255);
+  return alpha.toString(16).padStart(2, '0').toUpperCase();
+}
+
 // --- Global Error Handlers ---
 process.on('unhandledRejection', (reason, promise) => {
   console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
@@ -248,7 +255,11 @@ app.post('/generate-video', upload.any(), async (req, res) => {
     console.log("-----------------");
 
     const { newsUrl, title, subtitle, channelName, voice, titleFont, subtitleFont, channelFont, scriptFont,
-      titleColor, titleOutline, subtitleColor, subtitleOutline, channelColor, channelOutline, scriptColor, scriptOutline } = req.body;
+      titleColor, titleOutline, subtitleColor, subtitleOutline, channelColor, channelOutline, scriptColor, scriptOutline,
+      titleShadowColor, titleShadowOpacity, titleShadowBlur,
+      subtitleShadowColor, subtitleShadowOpacity, subtitleShadowBlur,
+      channelShadowColor, channelShadowOpacity, channelShadowBlur,
+      scriptShadowColor, scriptShadowOpacity, scriptShadowBlur } = req.body;
     
     // 소제목 디버깅 로그 추가
     console.log("=== SUBTITLE DEBUG ===");
@@ -370,7 +381,23 @@ app.post('/generate-video', upload.any(), async (req, res) => {
             const finalChannelOutline = hexToASS(channelOutline) || '&H000000&';
             const finalScriptColor = hexToASS(scriptColor) || '&H00FFFFFF&';
             const finalScriptOutline = hexToASS(scriptOutline) || '&H000000&';
+            
+            // 그림자 처리
+            const finalTitleShadowColor = hexToASS(titleShadowColor) || '&H000000&';
+            const finalTitleShadowAlpha = opacityToASSAlpha(titleShadowOpacity || 0.7);
+            const finalTitleShadow = titleShadowBlur || 3;
+            const finalSubtitleShadowColor = hexToASS(subtitleShadowColor) || '&H000000&';
+            const finalSubtitleShadowAlpha = opacityToASSAlpha(subtitleShadowOpacity || 0.7);
+            const finalSubtitleShadow = subtitleShadowBlur || 1;
+            const finalChannelShadowColor = hexToASS(channelShadowColor) || '&H000000&';
+            const finalChannelShadowAlpha = opacityToASSAlpha(channelShadowOpacity || 0.7);
+            const finalChannelShadow = channelShadowBlur || 1;
+            const finalScriptShadowColor = hexToASS(scriptShadowColor) || '&H000000&';
+            const finalScriptShadowAlpha = opacityToASSAlpha(scriptShadowOpacity || 0.7);
+            const finalScriptShadow = scriptShadowBlur || 1;
+            
             console.log(`[FONTS] Title: ${finalTitleFont}, Subtitle: ${finalSubtitleFont}, Channel: ${finalChannelFont}, Script: ${finalScriptFont}`);
+            console.log(`[SHADOWS] Title: ${finalTitleShadowColor}@${finalTitleShadowAlpha}, Subtitle: ${finalSubtitleShadowColor}@${finalSubtitleShadowAlpha}, Channel: ${finalChannelShadowColor}@${finalChannelShadowAlpha}, Script: ${finalScriptShadowColor}@${finalScriptShadowAlpha}`);
             
             // 본문 스크립트는 AI가 생성한 것을 사용 (소제목 제외)
             const scriptLines = script.split('\n').filter(line => line.trim());
@@ -426,13 +453,13 @@ app.post('/generate-video', upload.any(), async (req, res) => {
                 imageInputs.map((_, i) => `[finalbg${i}]`).join('') + `concat=n=${imageInputs.length}:v=1:a=0[bgv]`,
                 // 자막 추가 (4단계: 메인 제목 → 소제목 → 채널명 → 본문)
                 // 1) 메인 제목
-                `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=${finalTitleFont},FontSize=24,Bold=1,PrimaryColour=${finalTitleColor},OutlineColour=${finalTitleOutline},Outline=3,Shadow=3,Alignment=2,MarginV=220' [withtitle]`,
+                `[bgv]subtitles='${relativeTitleSubsPath}':charenc=UTF-8:force_style='FontName=${finalTitleFont},FontSize=24,Bold=1,PrimaryColour=${finalTitleColor},OutlineColour=${finalTitleOutline},Outline=3,Shadow=${finalTitleShadow},ShadowColour=${finalTitleShadowColor},ShadowAlpha=${finalTitleShadowAlpha},Alignment=2,MarginV=220' [withtitle]`,
                 // 2) 소제목
-                `[withtitle]subtitles='${relativeSubtitleSubsPath}':charenc=UTF-8:force_style='FontName=${finalSubtitleFont},FontSize=18,Bold=1,PrimaryColour=${finalSubtitleColor},OutlineColour=${finalSubtitleOutline},Outline=2,Shadow=1,Alignment=2,MarginV=200' [withsubtitle]`,
+                `[withtitle]subtitles='${relativeSubtitleSubsPath}':charenc=UTF-8:force_style='FontName=${finalSubtitleFont},FontSize=18,Bold=1,PrimaryColour=${finalSubtitleColor},OutlineColour=${finalSubtitleOutline},Outline=2,Shadow=${finalSubtitleShadow},ShadowColour=${finalSubtitleShadowColor},ShadowAlpha=${finalSubtitleShadowAlpha},Alignment=2,MarginV=200' [withsubtitle]`,
                 // 3) 채널 이름
-                `[withsubtitle]subtitles='${relativeChannelSubsPath}':charenc=UTF-8:force_style='FontName=${finalChannelFont},FontSize=11,Bold=1,PrimaryColour=${finalChannelColor},OutlineColour=${finalChannelOutline},Outline=3,Shadow=1,Alignment=3,MarginV=250,MarginR=35' [withchannel]`,
+                `[withsubtitle]subtitles='${relativeChannelSubsPath}':charenc=UTF-8:force_style='FontName=${finalChannelFont},FontSize=11,Bold=1,PrimaryColour=${finalChannelColor},OutlineColour=${finalChannelOutline},Outline=3,Shadow=${finalChannelShadow},ShadowColour=${finalChannelShadowColor},ShadowAlpha=${finalChannelShadowAlpha},Alignment=3,MarginV=250,MarginR=35' [withchannel]`,
                 // 4) 본문 자막
-                `[withchannel]subtitles='${relativeMainSubsPath}':charenc=UTF-8:force_style='FontName=${finalScriptFont},FontSize=12,Bold=1,PrimaryColour=${finalScriptColor},OutlineColour=${finalScriptOutline},Outline=2,Shadow=1,Alignment=2,MarginV=60' [v]`
+                `[withchannel]subtitles='${relativeMainSubsPath}':charenc=UTF-8:force_style='FontName=${finalScriptFont},FontSize=12,Bold=1,PrimaryColour=${finalScriptColor},OutlineColour=${finalScriptOutline},Outline=2,Shadow=${finalScriptShadow},ShadowColour=${finalScriptShadowColor},ShadowAlpha=${finalScriptShadowAlpha},Alignment=2,MarginV=60' [v]`
             ].join(';');
 
             // 6. Create ffmpeg command with multiple image inputs

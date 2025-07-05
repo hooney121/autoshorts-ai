@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, Variants, AnimatePresence, useInView, animate } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Check, ArrowRight, Menu, X, Sparkles, User, MessageSquare, Play, ClipboardPaste, Cpu, Download, LogIn, Gift, LogOut, Settings, Sticker, MicVocal, MessageCircleHeart, HelpCircle } from 'lucide-react'
+import { Check, ArrowRight, Menu, X, Sparkles, User, MessageSquare, Play, ClipboardPaste, Cpu, Download, LogIn, Gift, LogOut, Settings, Sticker, MicVocal, MessageCircleHeart, HelpCircle, Hash } from 'lucide-react'
 import { Accordion } from '@/components/ui/Accordion'
 import { Footer } from '@/components/layout/Footer'
 import { useAuth } from '@/contexts/AuthContext'
+import { ShortsExampleVideo } from './ShortsExampleVideo'
 
 const faqData = [
   {
@@ -173,9 +174,15 @@ export default function Home() {
               <Link href="#how-it-works" className="text-slate-600 hover:text-red-500 transition-colors">작동 방식</Link>
               <Link href="#faq" className="text-slate-600 hover:text-red-500 transition-colors">FAQ</Link>
               <Link href="/pricing" className="text-slate-600 hover:text-red-500 transition-colors">가격</Link>
+              <Link href="/advertising" className="text-slate-600 hover:text-blue-500 transition-colors">광고 문의</Link>
+              <Link href="/create-story" className="text-slate-600 hover:text-green-500 transition-colors font-bold">썰튜브 쇼츠 제작</Link>
             </nav>
 
             <div className="flex items-center space-x-4">
+              <Link href="/create-story" className="hidden md:inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg transition-all mr-2">
+                <MessageCircleHeart className="mr-2 h-4 w-4" />
+                썰튜브 쇼츠
+              </Link>
               <Link href="/create" className="hidden md:inline-flex items-center bg-gradient-to-r from-red-600 to-orange-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg transition-all">
                 쇼츠 제작
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -267,7 +274,11 @@ export default function Home() {
               <Link href="#how-it-works" className="hover:text-red-500 transition-colors text-lg" onClick={() => setIsMenuOpen(false)}>작동 방식</Link>
               <Link href="#faq" className="hover:text-red-500 transition-colors text-lg" onClick={() => setIsMenuOpen(false)}>FAQ</Link>
               <Link href="/pricing" className="hover:text-red-500 transition-colors text-lg" onClick={() => setIsMenuOpen(false)}>가격</Link>
-              <Link href="/create" className="inline-flex items-center justify-center bg-gradient-to-r from-red-600 to-orange-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all mt-4">
+              <Link href="/create-story" className="inline-flex items-center justify-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
+                <MessageCircleHeart className="mr-2 h-4 w-4" />
+                썰튜브 쇼츠
+              </Link>
+              <Link href="/create" className="inline-flex items-center justify-center bg-gradient-to-r from-red-600 to-orange-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
                 쇼츠 제작
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -379,9 +390,8 @@ export default function Home() {
                 AI로 만드는 최신 뉴스 쇼츠
               </div>
               <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-slate-900 via-red-600 to-orange-500 text-transparent bg-clip-text leading-tight">
-                딸깍으로
-                <br />
-                <span className="text-4xl md:text-6xl">쇼츠 자동 생성</span>
+                원클릭으로<br />
+                <span className="text-4xl md:text-6xl">간단한 쇼츠 생성</span>
               </h1>
               <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto leading-relaxed">
                 URL을 붙여넣거나 대본을 입력하면 AI가 자동으로 매력적인 쇼츠 영상을 만들어드립니다
@@ -391,17 +401,19 @@ export default function Home() {
                   href="/create"
                   className="group inline-flex items-center bg-gradient-to-r from-red-600 to-orange-600 text-white px-8 py-4 rounded-xl text-lg font-medium hover:shadow-2xl hover:scale-105 transition-all duration-300 shadow-lg"
                 >
-                  지금 시작하기
+                  뉴스 쇼츠 제작
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link 
-                  href="/create"
-                  className="inline-flex items-center bg-white text-slate-700 px-8 py-4 rounded-xl text-lg font-medium hover:bg-slate-100 transition-all duration-200 border border-slate-300"
+                  href="/create-story"
+                  className="group inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-8 py-4 rounded-xl text-lg font-medium hover:shadow-2xl hover:scale-105 transition-all duration-300 shadow-lg"
                 >
-                  <Play className="mr-2 h-5 w-5" />
-                  무료 체험하기
+                  썰튜브 쇼츠 제작
+                  <MessageCircleHeart className="ml-2 h-5 w-5 group-hover:scale-110 transition-transform" />
                 </Link>
               </div>
+              {/* 예시 영상 섹션 */}
+              <ShortsExampleVideo />
             </motion.div>
           </div>
         </motion.section>
@@ -518,6 +530,110 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-semibold mb-4 text-slate-900">3. 영상 다운로드</h3>
                 <p className="text-slate-600">완성된 쇼츠 영상을 다운로드하여 플랫폼에 업로드하세요.</p>
+              </motion.div>
+            </div>
+          </div>
+        </motion.section>
+
+        {/* 썰튜브 쇼츠 제작 섹션 */}
+        <motion.section 
+          className="py-20 bg-gradient-to-br from-green-50 via-white to-teal-50"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={sectionVariants}
+        >
+          <div className="container mx-auto max-w-7xl px-4">
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-4 py-2 rounded-full text-sm font-medium mb-6">
+                <MessageCircleHeart className="h-4 w-4 mr-2" />
+                STORY SHORTS
+              </div>
+              <h2 className="text-4xl font-bold mb-4 text-slate-900">
+                재미있는 이야기를 쇼츠로 만들어보세요
+              </h2>
+              <p className="text-xl text-slate-600 max-w-2xl mx-auto">
+                일상의 재미있는 이야기부터 판타지 스토리까지, AI가 자동으로 쇼츠용 스크립트와 음성을 생성합니다
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              <motion.div 
+                variants={cardVariants}
+                custom={0}
+                className="relative"
+              >
+                <div className="bg-white rounded-2xl p-8 shadow-xl border border-slate-200">
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-r from-green-600 to-teal-600 text-white p-4 rounded-lg">
+                      <h3 className="text-xl font-bold mb-2">충격적인 학교 뒷이야기</h3>
+                      <p className="text-green-100 text-sm">믿을 수 없는 결말</p>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-900 mb-2">📖 이야기 내용</h4>
+                        <p className="text-sm text-slate-600">어느 날 밤, 친구와 함께 놀러간 민수는 학교 뒤편에서 이상한 소리를 들었습니다...</p>
+                      </div>
+                      
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-900 mb-2">🎬 생성된 스크립트</h4>
+                        <p className="text-sm text-slate-600">"충격적인 결말! 어느 날 밤, 친구와 함께 놀러간 민수는..."</p>
+                      </div>
+                      
+                      <div className="bg-slate-50 rounded-lg p-4">
+                        <h4 className="font-semibold text-slate-900 mb-2">🎵 AI 음성 + 자막</h4>
+                        <p className="text-sm text-slate-600">자연스러운 한국어 음성과 정확한 자막이 자동으로 생성됩니다</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="absolute -top-4 -right-4">
+                  <Link 
+                    href="/create-story"
+                    className="inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-3 rounded-xl font-semibold hover:shadow-2xl hover:scale-105 transition-all duration-300"
+                  >
+                    <MessageCircleHeart className="mr-2 h-4 w-4" />
+                    썰튜브 쇼츠 시작
+                  </Link>
+                </div>
+              </motion.div>
+
+              <motion.div 
+                variants={cardVariants}
+                custom={1}
+                className="space-y-6"
+              >
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200">
+                  <div className="flex items-center mb-4">
+                    <div className="bg-gradient-to-r from-green-600 to-teal-600 p-2 rounded-lg mr-4">
+                      <MessageCircleHeart className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900">이야기 작성</h3>
+                  </div>
+                  <p className="text-slate-600">재미있고 흥미로운 이야기를 자세히 작성하세요. AI가 이를 바탕으로 쇼츠용 스크립트를 생성합니다.</p>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200">
+                  <div className="flex items-center mb-4">
+                    <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg mr-4">
+                      <MicVocal className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900">AI 음성 생성</h3>
+                  </div>
+                  <p className="text-slate-600">ElevenLabs AI가 자연스러운 한국어 음성과 정확한 자막을 자동으로 생성합니다.</p>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200">
+                  <div className="flex items-center mb-4">
+                    <div className="bg-gradient-to-r from-orange-600 to-red-600 p-2 rounded-lg mr-4">
+                      <Play className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900">쇼츠 비디오 제작</h3>
+                  </div>
+                  <p className="text-slate-600">업로드한 이미지나 AI가 찾은 관련 이미지와 함께 완성된 쇼츠 비디오를 다운로드하세요.</p>
+                </div>
               </motion.div>
             </div>
           </div>
