@@ -175,11 +175,11 @@ export default function Home() {
               <Link href="#faq" className="text-slate-600 hover:text-red-500 transition-colors">FAQ</Link>
               <Link href="/pricing" className="text-slate-600 hover:text-red-500 transition-colors">가격</Link>
               <Link href="/advertising" className="text-slate-600 hover:text-blue-500 transition-colors">광고 문의</Link>
-              <Link href="/create-story" className="text-slate-600 hover:text-green-500 transition-colors font-bold">썰튜브 쇼츠 제작</Link>
+              <Link href="/create-sseoltube" className="text-slate-600 hover:text-green-500 transition-colors font-bold">썰튜브 쇼츠 제작</Link>
             </nav>
 
             <div className="flex items-center space-x-4">
-              <Link href="/create-story" className="hidden md:inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg transition-all mr-2">
+              <Link href="/create-sseoltube" className="hidden md:inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-4 py-2 rounded-lg font-semibold hover:shadow-lg transition-all mr-2">
                 <MessageCircleHeart className="mr-2 h-4 w-4" />
                 썰튜브 쇼츠
               </Link>
@@ -274,7 +274,7 @@ export default function Home() {
               <Link href="#how-it-works" className="hover:text-red-500 transition-colors text-lg" onClick={() => setIsMenuOpen(false)}>작동 방식</Link>
               <Link href="#faq" className="hover:text-red-500 transition-colors text-lg" onClick={() => setIsMenuOpen(false)}>FAQ</Link>
               <Link href="/pricing" className="hover:text-red-500 transition-colors text-lg" onClick={() => setIsMenuOpen(false)}>가격</Link>
-              <Link href="/create-story" className="inline-flex items-center justify-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
+              <Link href="/create-sseoltube" className="inline-flex items-center justify-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
                 <MessageCircleHeart className="mr-2 h-4 w-4" />
                 썰튜브 쇼츠
               </Link>
@@ -405,7 +405,7 @@ export default function Home() {
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link 
-                  href="/create-story"
+                  href="/create-sseoltube"
                   className="group inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-8 py-4 rounded-xl text-lg font-medium hover:shadow-2xl hover:scale-105 transition-all duration-300 shadow-lg"
                 >
                   썰튜브 쇼츠 제작
@@ -591,7 +591,7 @@ export default function Home() {
                 
                 <div className="absolute -top-4 -right-4">
                   <Link 
-                    href="/create-story"
+                    href="/create-sseoltube"
                     className="inline-flex items-center bg-gradient-to-r from-green-600 to-teal-600 text-white px-6 py-3 rounded-xl font-semibold hover:shadow-2xl hover:scale-105 transition-all duration-300"
                   >
                     <MessageCircleHeart className="mr-2 h-4 w-4" />

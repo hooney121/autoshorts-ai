@@ -7,7 +7,7 @@ import { MessageCircleHeart, Upload, Sparkles, Play, Download, CheckCircle, Cloc
 
 export default function CreateStoryPage() {
   const [title, setTitle] = useState('');
-  const [subtitle, setSubtitle] = useState('');
+  const [channelName, setChannelName] = useState('');
   const [storyContent, setStoryContent] = useState('');
   const [images, setImages] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,44 +36,44 @@ export default function CreateStoryPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !storyContent.trim()) {
-      alert('제목과 이야기 내용을 입력해주세요.');
+    if (!title || !storyContent) {
+      alert('제목과 이야기 내용을 모두 입력해주세요.');
       return;
     }
+    if (images.length === 0) {
+      alert('이미지를 1장 이상 업로드해주세요.');
+      return;
+    }
+    
     setIsLoading(true);
-    setCurrentStep(0);
-    setProgress('이야기를 분석하고 스크립트를 생성하는 중...');
+    setProgress('썰튜브 영상 생성 중...');
+    
     try {
       const formData = new FormData();
-      formData.append('title', title);
-      formData.append('subtitle', subtitle);
       formData.append('storyContent', storyContent);
+      formData.append('title', title);
+      formData.append('channelName', channelName);
+      formData.append('voice', '21m00Tcm4TlvDq8ikWAM'); // 기본 음성
+      
+      // 이미지 파일들 추가
       images.forEach((image) => {
         formData.append('images', image);
       });
-      setCurrentStep(0);
-      setProgress('AI가 이야기를 분석하고 쇼츠용 스크립트를 생성하는 중...');
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      setCurrentStep(1);
-      setProgress('자연스러운 음성을 생성하는 중...');
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      const response = await fetch('http://localhost:3001/generate-story-video', {
+      
+      const response = await fetch('https://bc2a6408c776.ngrok.app/generate-story-video', {
         method: 'POST',
         body: formData,
       });
+
       if (!response.ok) {
-        throw new Error('비디오 생성에 실패했습니다.');
+        const errorData = await response.json();
+        throw new Error(errorData.error || '썰튜브 영상 생성에 실패했습니다.');
       }
-      setCurrentStep(2);
-      setProgress('이미지를 처리하고 비디오에 적용하는 중...');
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      setCurrentStep(3);
-      setProgress('최종 비디오를 합성하는 중...');
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      setCurrentStep(4);
-      setProgress('비디오를 다운로드하는 중...');
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
+      
+      // 자동 다운로드
       const a = document.createElement('a');
       a.href = url;
       a.download = `${title.replace(/[^a-z0-9]/gi, '_')}.mp4`;
@@ -81,15 +81,13 @@ export default function CreateStoryPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      
       setProgress('완료!');
-      alert('썰튜브 쇼츠가 성공적으로 생성되었습니다!');
-      setTitle('');
-      setSubtitle('');
-      setStoryContent('');
-      setImages([]);
+      alert('썰튜브 영상이 성공적으로 생성되었습니다!');
+      
     } catch (error) {
       console.error('Error:', error);
-      alert('비디오 생성 중 오류가 발생했습니다.');
+      alert('썰튜브 영상 생성 중 오류가 발생했습니다: ' + (error instanceof Error ? error.message : '알 수 없는 오류'));
     } finally {
       setIsLoading(false);
       setProgress('');
@@ -126,12 +124,12 @@ export default function CreateStoryPage() {
                   </label>
                   <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-7 py-5 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-green-400/30 focus:border-green-400 text-lg transition-all duration-200 bg-white/80 shadow-inner" placeholder="예: 충격적인 학교 뒷이야기" required />
                 </div>
-                {/* 소제목 입력 */}
+                {/* 채널명 입력 */}
                 <div className="space-y-2">
                   <label className="block text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-teal-400" /> 소제목 (선택)
+                    <Sparkles className="h-5 w-5 text-teal-400" /> 채널명 (선택)
                   </label>
-                  <input type="text" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className="w-full px-7 py-5 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-teal-400/30 focus:border-teal-400 text-lg transition-all duration-200 bg-white/80 shadow-inner" placeholder="예: 믿을 수 없는 결말" />
+                  <input type="text" value={channelName} onChange={(e) => setChannelName(e.target.value)} className="w-full px-7 py-5 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-teal-400/30 focus:border-teal-400 text-lg transition-all duration-200 bg-white/80 shadow-inner" placeholder="예: 믿을 수 없는 결말" />
                 </div>
                 {/* 이야기 내용 입력 */}
                 <div className="space-y-2">
@@ -253,7 +251,7 @@ export default function CreateStoryPage() {
           <div className="flex flex-col md:flex-row justify-center items-center gap-8">
             <div className="bg-white/80 rounded-2xl shadow-xl p-6 w-80">
               <h3 className="font-bold text-lg mb-2 text-green-600">예시 썰</h3>
-              <p className="text-gray-700 mb-4">"학교에서 있었던 충격적인 사건! AI가 영상으로 만들어줬어요."</p>
+              <p className="text-gray-700 mb-4">“학교에서 있었던 충격적인 사건! AI가 영상으로 만들어줬어요.”</p>
               <iframe
                 src="https://www.youtube.com/embed/1kwe7QWzyfw"
                 title="쇼츠 예시 영상"

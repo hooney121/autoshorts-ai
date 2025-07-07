@@ -1,0 +1,12 @@
+version: 2
+authtoken: 2ytqUU8Az5IG8179fHTKqacJAju_VuFjaAikapWSpwJnbFKr
+region: jp
+tunnels:
+  news:
+    addr: 4000
+    proto: http
+    domain: onminds.ngrok.app
+  sseoltube:
+    addr: 4001
+    proto: http
+    # 필요시 별도 도메인 지정 가능
